@@ -28,6 +28,9 @@ app.get("/", (req, res, next) => {
 
 app.use("/auth", authRoutes);
 
+// protected routes
+// app.use('/user',authenticate,userRoutes)
+
 app.use(errorHandler);
 
 app.listen(PORT, async () => {
