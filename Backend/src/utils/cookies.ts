@@ -1,7 +1,7 @@
 import { Response,CookieOptions } from "express"
 import { fifteenMinutesFromNow, thirtyDaysFromNow } from "./date";
 
-const REFRESH_PATH = "/auth/refresh";
+export const REFRESH_PATH = "/auth/refresh";
 
 const secure = process.env.NODE_ENV !== "development";
 
