@@ -18,3 +18,5 @@ const authenticate:RequestHandler = (req, res, next) => {
   req.sessionId = payload.sessionId as mongoose.Types.ObjectId;
   next();
 };
+
+export default authenticate;
