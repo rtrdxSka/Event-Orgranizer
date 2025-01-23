@@ -180,6 +180,7 @@ export const verifyEmail = async (code: string) => {
 
 export const sendPasswordResetEmail = async (email: string) => {
   //get the user by email
+  try{
   const user = await UserModel.findOne({email});
   appAssert(user, NOT_FOUND, "User not found");
 
@@ -221,7 +222,12 @@ export const sendPasswordResetEmail = async (email: string) => {
     url,
     emailId: data.id
   }
+}catch(error: any){
+  console.log('SendPasswordResetEmail Error:', error.message);
+  return {};
+}
 };
+
 
 type ResetPasswordParams = {
   password: string;
