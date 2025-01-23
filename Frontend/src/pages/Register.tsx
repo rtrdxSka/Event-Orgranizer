@@ -19,24 +19,24 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { Lock, Mail, AlertCircle, KeyRound } from 'lucide-react';
 import anime from 'animejs/lib/anime.es.js';
 import Navbar from '@/components/Navbar';
 import { useMutation } from '@tanstack/react-query';
-import { login } from '@/lib/api';
+import { register } from '@/lib/api';
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { loginSchema } from "../lib/validations/auth.schemas"
+import { registerSchema } from "@/lib/validations/auth.schemas"
 import type { z } from "zod"
 
-type LoginInput = z.infer<typeof loginSchema>
+type RegisterInput = z.infer<typeof registerSchema>
 
-type LoginError = {
+type RegisterError = {
   message: string;
   status: number;
 }
 
-const Login = () => {
+const Register = () => {
   const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState<string>("");
 
@@ -52,35 +52,39 @@ const Login = () => {
   const subtitleRef = useRef(null);
 
   // Form setup with react-hook-form and zod
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<RegisterInput>({
+    resolver: zodResolver(registerSchema),
     defaultValues: {
       email: "",
       password: "",
+      confirmPassword: "",
     },
   });
 
-  const { mutate: loginMutation, isLoading } = useMutation({
-    mutationFn: login,
+  const { mutate: registerMutation, isLoading } = useMutation({
+    mutationFn: register,
     onSuccess: () => {
       setErrorMessage("");
       navigate('/', {
         replace: true,
       });
     },
-    onError: (error: LoginError) => {
+    onError: (error: RegisterError) => {
       setErrorMessage(error.message);
-      // Clear password field on error
       form.setValue('password', '');
+      form.setValue('confirmPassword', '');
     }
   });
 
-  const onSubmit = (data: LoginInput) => {
-    setErrorMessage(""); // Clear any existing error messages
-    loginMutation(data);
+  const onSubmit = async (data: RegisterInput) => {
+    try {
+      setErrorMessage(""); // Clear any existing error messages
+      registerMutation(data);
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
   };
 
-  // Rest of your animation useEffect...
   useEffect(() => {
     // Initial animations
     const timeline = anime.timeline({
@@ -138,7 +142,7 @@ const Login = () => {
     <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
       <Navbar />
       
-      {/* Background animations remain the same... */}
+      {/* Background animations */}
       <div className="absolute inset-0">
         {orbPositions.map((position, i) => (
           <div
@@ -156,15 +160,15 @@ const Login = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/50 to-purple-950/80" />
       </div>
 
-      {/* Login Content */}
+      {/* Register Content */}
       <div className="flex-1 flex items-center justify-center">
         <div className="relative w-full max-w-md px-4 pt-16">
           <div className="text-center mb-6">
             <h1 ref={titleRef} className="text-4xl font-bold text-white mb-2">
-              Welcome Back
+              Create Account
             </h1>
             <p ref={subtitleRef} className="text-lg text-purple-200">
-              Sign in to continue planning amazing events
+              Join us and start planning amazing events
             </p>
           </div>
 
@@ -173,9 +177,9 @@ const Login = () => {
             className="bg-purple-900/40 border border-purple-700/50 backdrop-blur-sm"
           >
             <CardHeader className="pb-4">
-              <CardTitle className="text-2xl text-purple-100">Sign In</CardTitle>
+              <CardTitle className="text-2xl text-purple-100">Sign Up</CardTitle>
               <CardDescription className="text-purple-200">
-                Enter your credentials to access your account
+                Enter your details to create your account
               </CardDescription>
             </CardHeader>
             <Form {...form}>
@@ -230,30 +234,45 @@ const Login = () => {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-purple-100">Confirm Password</FormLabel>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-300" />
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Confirm your password"
+                              className="pl-10 bg-purple-950/50 border-purple-700/50 text-purple-100 placeholder:text-purple-400"
+                              {...field}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage className="text-red-300" />
+                      </FormItem>
+                    )}
+                  />
                   <Button 
                     type="submit"
                     className="w-full bg-gradient-to-r from-purple-400 to-blue-400 hover:from-purple-500 hover:to-blue-500 text-purple-950 font-semibold mt-2"
                     disabled={isLoading}
                   >
-                    {isLoading ? "Signing in..." : "Sign In"}
+                    {isLoading ? "Creating Account..." : "Create Account"}
                   </Button>
                 </CardContent>
               </form>
             </Form>
             <CardFooter className="flex flex-col space-y-3 pt-2">
-              <Link 
-                to="/password/forgot" 
-                className="text-sm text-purple-200 hover:text-purple-100 transition-colors"
-              >
-                Forgot your password?
-              </Link>
               <div className="text-purple-200">
-                Don't have an account?{' '}
+                Already have an account?{' '}
                 <Link 
-                  to="/register" 
+                  to="/login" 
                   className="text-purple-300 hover:text-purple-100 transition-colors font-medium"
                 >
-                  Sign up
+                  Sign in
                 </Link>
               </div>
             </CardFooter>
@@ -264,4 +283,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;
