@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Users, MessageSquare, MapPin, Menu, X, Check, Clock, Bell } from 'lucide-react';
 import anime from 'animejs/lib/anime.es.js';
 import { Link, useNavigate  } from 'react-router-dom';
+import Navbar from '@/components/Navbar';
 
 const Home = () => {
   const navigate = useNavigate();
   const [currentWord, setCurrentWord] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false)
-  const [isNavOpen, setIsNavOpen] = useState(false);
   const alternateWords = ['Hangouts', 'Meetings', 'Reunions', 'Events', 'Meetups', 'Celebrations'];
   const [isVisible, setIsVisible] = useState({});
   const [orbPositions] = useState(
@@ -188,56 +188,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-purple-950">
-     {/* Updated Navbar */}
-     {/* Updated Navbar */}
-     <nav className="navbar fixed w-full z-50 bg-purple-900/90 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <Link to="/" className="text-2xl font-bold text-white">
-              EventPlanner
-            </Link>
-            
-            {/* Mobile menu button */}
-            <button className="md:hidden" onClick={() => setIsNavOpen(!isNavOpen)}>
-              {isNavOpen ? <X className="text-white" /> : <Menu className="text-white" />}
-            </button>
-
-            {/* Desktop menu */}
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-purple-100 hover:text-white transition-colors">
-                Features
-              </a>
-              <a href="#howItWorks" className="text-purple-100 hover:text-white transition-colors">
-                How It Works
-              </a>
-              <Link 
-                to="/login"
-                className="bg-purple-200 text-purple-950 px-4 py-2 rounded-lg hover:bg-purple-100 transition-colors font-medium"
-              >
-                Sign In
-              </Link>
-            </div>
-          </div>
-
-          {/* Mobile menu */}
-          <div className={`md:hidden ${isNavOpen ? 'block' : 'hidden'} py-4`}>
-            <div className="flex flex-col space-y-4">
-              <a href="#features" className="text-purple-100 hover:text-white transition-colors">
-                Features
-              </a>
-              <a href="#howItWorks" className="text-purple-100 hover:text-white transition-colors">
-                How It Works
-              </a>
-              <Link 
-                to="/login"
-                className="text-purple-100 hover:text-white transition-colors"
-              >
-                Sign In
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <Navbar />
 
       {/* Hero Section */}
       <div className="h-screen bg-gradient-to-r from-purple-900 via-purple-800 to-blue-900 relative overflow-hidden">
