@@ -35,3 +35,11 @@ export const sendPasswordResetEmail = async (email: string) => {
 export const resetPassword = async ({verificationCode, password}:ResetPasswordParams) => {
   return API.post("/auth/password/reset", { verificationCode, password });  
 }
+
+export const getUser = async () => {
+  return API.get("/user");
+};
+
+export const logout = async () => {
+  return API.get("/auth/logout");
+}
