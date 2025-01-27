@@ -7,7 +7,8 @@ const useAuth = (opts = {}) => {
   const { data: user, ...rest } = useQuery({
     queryKey: [AUTH],
     queryFn: getUser,
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchOnMount: true,
     retry: false,
     enabled: opts.enabled !== false, // Allow disabling the query
     ...opts

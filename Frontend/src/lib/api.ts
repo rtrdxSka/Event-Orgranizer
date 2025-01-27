@@ -43,3 +43,11 @@ export const getUser = async () => {
 export const logout = async () => {
   return API.get("/auth/logout");
 }
+
+export const getSessions = async () => {
+  return API.get("/sessions");
+}
+
+export const deleteSessions = async (id:string) => {
+  API.delete(`/sessions/${id}`);
+}
