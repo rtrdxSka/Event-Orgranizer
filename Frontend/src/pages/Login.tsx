@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -37,8 +37,10 @@ type LoginError = {
 }
 
 const Login = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const redirectUrl = location.state?.redirectUrl || '/';
 
   const [orbPositions] = useState(
     [...Array(6)].map(() => ({
@@ -64,7 +66,7 @@ const Login = () => {
     mutationFn: login,
     onSuccess: () => {
       setErrorMessage("");
-      navigate('/', {
+      navigate(redirectUrl, {
         replace: true,
       });
     },
