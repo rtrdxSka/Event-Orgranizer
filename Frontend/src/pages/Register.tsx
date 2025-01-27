@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -17,24 +17,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Lock, Mail, AlertCircle, KeyRound } from 'lucide-react';
-import anime from 'animejs/lib/anime.es.js';
-import Navbar from '@/components/Navbar';
-import { useMutation } from '@tanstack/react-query';
-import { register } from '@/lib/api';
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { registerSchema } from "@/lib/validations/auth.schemas"
-import type { z } from "zod"
+} from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Lock, Mail, AlertCircle, KeyRound } from "lucide-react";
+import anime from "animejs/lib/anime.es.js";
+import Navbar from "@/components/Navbar";
+import { useMutation } from "@tanstack/react-query";
+import { register } from "@/lib/api";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { registerSchema } from "@/lib/validations/auth.schemas";
+import type { z } from "zod";
 
-type RegisterInput = z.infer<typeof registerSchema>
+type RegisterInput = z.infer<typeof registerSchema>;
 
 type RegisterError = {
   message: string;
   status: number;
-}
+};
 
 const Register = () => {
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ const Register = () => {
   const [orbPositions] = useState(
     [...Array(6)].map(() => ({
       top: `${Math.random() * 100}%`,
-      left: `${Math.random() * 100}%`
+      left: `${Math.random() * 100}%`,
     }))
   );
 
@@ -65,15 +65,15 @@ const Register = () => {
     mutationFn: register,
     onSuccess: () => {
       setErrorMessage("");
-      navigate('/', {
+      navigate("/", {
         replace: true,
       });
     },
     onError: (error: RegisterError) => {
       setErrorMessage(error.message);
-      form.setValue('password', '');
-      form.setValue('confirmPassword', '');
-    }
+      form.setValue("password", "");
+      form.setValue("confirmPassword", "");
+    },
   });
 
   const onSubmit = async (data: RegisterInput) => {
@@ -88,7 +88,7 @@ const Register = () => {
   useEffect(() => {
     // Initial animations
     const timeline = anime.timeline({
-      easing: 'easeOutExpo',
+      easing: "easeOutExpo",
     });
 
     timeline
@@ -98,62 +98,68 @@ const Register = () => {
         translateY: [50, 0],
         duration: 1200,
       })
-      .add({
-        targets: subtitleRef.current,
-        opacity: [0, 1],
-        translateY: [30, 0],
-        duration: 1000,
-      }, '-=800')
-      .add({
-        targets: formRef.current,
-        opacity: [0, 1],
-        translateY: [20, 0],
-        duration: 800,
-      }, '-=600');
+      .add(
+        {
+          targets: subtitleRef.current,
+          opacity: [0, 1],
+          translateY: [30, 0],
+          duration: 1000,
+        },
+        "-=800"
+      )
+      .add(
+        {
+          targets: formRef.current,
+          opacity: [0, 1],
+          translateY: [20, 0],
+          duration: 800,
+        },
+        "-=600"
+      );
 
     // Animate floating orbs
     anime({
-      targets: '.floating-orb',
-      translateX: function() {
+      targets: ".floating-orb",
+      translateX: function () {
         return anime.random(-30, 30);
       },
-      translateY: function() {
+      translateY: function () {
         return anime.random(-30, 30);
       },
-      scale: function() {
+      scale: function () {
         return anime.random(0.8, 1.2);
       },
-      opacity: function() {
+      opacity: function () {
         return anime.random(0.2, 0.4);
       },
-      duration: function() {
+      duration: function () {
         return anime.random(3000, 5000);
       },
-      delay: function() {
+      delay: function () {
         return anime.random(0, 1000);
       },
-      direction: 'alternate',
+      direction: "alternate",
       loop: true,
-      easing: 'easeInOutSine'
+      easing: "easeInOutSine",
     });
   }, []);
 
   return (
     <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
       <Navbar />
-      
+
       {/* Background animations */}
       <div className="absolute inset-0">
         {orbPositions.map((position, i) => (
           <div
             key={i}
             className={`floating-orb absolute rounded-full blur-3xl opacity-20
-              ${i % 2 === 0 ? 'bg-purple-600' : 'bg-blue-600'}
-              ${i % 3 === 0 ? 'w-96 h-96' : 'w-80 h-80'}`}
+              ${i % 2 === 0 ? "bg-purple-600" : "bg-blue-600"}
+              ${i % 3 === 0 ? "w-96 h-96" : "w-80 h-80"}`}
             style={{
               top: position.top,
               left: position.left,
-              transform: 'translate(-50%, -50%)'
+              transform: "translate(-50%, -50%)",
             }}
           />
         ))}
@@ -177,7 +183,9 @@ const Register = () => {
             className="bg-purple-900/40 border border-purple-700/50 backdrop-blur-sm"
           >
             <CardHeader className="pb-4">
-              <CardTitle className="text-2xl text-purple-100">Sign Up</CardTitle>
+              <CardTitle className="text-2xl text-purple-100">
+                Sign Up
+              </CardTitle>
               <CardDescription className="text-purple-200">
                 Enter your details to create your account
               </CardDescription>
@@ -186,11 +194,16 @@ const Register = () => {
               <form onSubmit={form.handleSubmit(onSubmit)}>
                 <CardContent className="space-y-4">
                   {errorMessage && (
-                    <Alert variant="destructive" className="bg-red-900/20 border-red-500/50">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-red-200">
-                        {errorMessage}
-                      </AlertDescription>
+                    <Alert
+                      variant="destructive"
+                      className="bg-red-900/20 border-red-500/50 py-2" // Reduced vertical padding
+                    >
+                      <div className="flex items-center justify-center w-full gap-1.5">
+                        <AlertCircle className="h-4 w-4 shrink-0" />{" "}
+                        <AlertDescription className="text-red-200 text-sm">
+                          {errorMessage}
+                        </AlertDescription>
+                      </div>
                     </Alert>
                   )}
                   <FormField
@@ -218,7 +231,9 @@ const Register = () => {
                     name="password"
                     render={({ field }) => (
                       <FormItem className="space-y-1.5">
-                        <FormLabel className="text-purple-100">Password</FormLabel>
+                        <FormLabel className="text-purple-100">
+                          Password
+                        </FormLabel>
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-300" />
                           <FormControl>
@@ -239,7 +254,9 @@ const Register = () => {
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem className="space-y-1.5">
-                        <FormLabel className="text-purple-100">Confirm Password</FormLabel>
+                        <FormLabel className="text-purple-100">
+                          Confirm Password
+                        </FormLabel>
                         <div className="relative">
                           <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-300" />
                           <FormControl>
@@ -255,7 +272,7 @@ const Register = () => {
                       </FormItem>
                     )}
                   />
-                  <Button 
+                  <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-purple-400 to-blue-400 hover:from-purple-500 hover:to-blue-500 text-purple-950 font-semibold mt-2"
                     disabled={isLoading}
@@ -267,9 +284,9 @@ const Register = () => {
             </Form>
             <CardFooter className="flex flex-col space-y-3 pt-2">
               <div className="text-purple-200">
-                Already have an account?{' '}
-                <Link 
-                  to="/login" 
+                Already have an account?{" "}
+                <Link
+                  to="/login"
                   className="text-purple-300 hover:text-purple-100 transition-colors font-medium"
                 >
                   Sign in

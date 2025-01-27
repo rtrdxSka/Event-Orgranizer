@@ -182,12 +182,17 @@ const Login = () => {
               <form onSubmit={form.handleSubmit(onSubmit)}>
                 <CardContent className="space-y-4">
                   {errorMessage && (
-                    <Alert variant="destructive" className="bg-red-900/20 border-red-500/50">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-red-200">
+                    <Alert 
+                    variant="destructive" 
+                    className="bg-red-900/20 border-red-500/50 py-2" // Reduced vertical padding
+                  >
+                    <div className="flex items-center justify-center w-full gap-1.5"> {/* Added wrapper div */}
+                      <AlertCircle className="h-4 w-4 shrink-0" /> {/* Added shrink-0 */}
+                      <AlertDescription className="text-red-200 text-sm"> {/* Added text-sm */}
                         {errorMessage}
                       </AlertDescription>
-                    </Alert>
+                    </div>
+                  </Alert>
                   )}
                   <FormField
                     control={form.control}
