@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom"
+import { Route, Routes, useNavigate } from "react-router-dom"
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -9,9 +9,12 @@ import ResetPassword from "./pages/ResetPassword"
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { GuestRoute } from "./components/GuesRoute"
 import Profile from "./pages/Profile"
+import { setNavigate } from "./lib/navigation"
 
 
 function App() {
+  const navigate = useNavigate();
+  setNavigate(navigate);
   return (
     <Routes>
       <Route path="/" element={<Home />} />
