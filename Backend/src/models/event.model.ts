@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// Interfaces for the document methods
 interface VotingOption {
   optionName: string;
   votes: mongoose.Types.ObjectId[];
@@ -11,19 +10,19 @@ interface VotingCategory {
   options: VotingOption[];
 }
 
-// Main Event Document interface
 export interface EventDocument extends mongoose.Document {
   name: string;
   description: string;
+  eventCode: string;
+  eventDate: Date | null;
+  place: string | null;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   customFields: Map<string, any>;
   votingCategories: VotingCategory[];
-  // Add method types to the interface
   addVote: (categoryName: string, optionName: string, userId: mongoose.Types.ObjectId) => Promise<void>;
 }
 
-// Main Event Schema
 const eventSchema = new mongoose.Schema<EventDocument>({
   name: { 
     type: String, 
@@ -33,6 +32,21 @@ const eventSchema = new mongoose.Schema<EventDocument>({
   description: { 
     type: String, 
     required: true 
+  },
+  eventCode: {
+    type: String,
+    required: true,
+    unique: true,
+    uppercase: true,
+    index: true
+  },
+  eventDate: {
+    type: Date,
+    default: null
+  },
+  place: {
+    type: String,
+    default: null
   },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -64,26 +78,23 @@ const eventSchema = new mongoose.Schema<EventDocument>({
   timestamps: true
 });
 
-// Method to handle voting with proper typing
 eventSchema.methods.addVote = async function(
   this: EventDocument,
   categoryName: string,
   optionName: string,
   userId: mongoose.Types.ObjectId
 ): Promise<void> {
-  const category = this.votingCategories.find((c: VotingCategory) => c.categoryName === categoryName);
+  const category = this.votingCategories.find(c => c.categoryName === categoryName);
   if (!category) throw new Error('Category not found');
 
-  const option = category.options.find((o: VotingOption) => o.optionName === optionName);
+  const option = category.options.find(o => o.optionName === optionName);
   if (!option) throw new Error('Option not found');
 
-  // Remove vote from other options in this category first
-  category.options.forEach((o: VotingOption) => {
-    o.votes = o.votes.filter((v: mongoose.Types.ObjectId) => !v.equals(userId));
+  category.options.forEach(o => {
+    o.votes = o.votes.filter(v => !v.equals(userId));
   });
 
-  // Add vote to selected option
-  if (!option.votes.some((v: mongoose.Types.ObjectId) => v.equals(userId))) {
+  if (!option.votes.some(v => v.equals(userId))) {
     option.votes.push(userId);
   }
 
