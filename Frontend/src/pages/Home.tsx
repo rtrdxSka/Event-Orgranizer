@@ -233,6 +233,7 @@ const Home = () => {
                 size="lg" 
                 variant="secondary" 
                 className="bg-purple-200 text-purple-950 hover:bg-purple-100 font-semibold px-12 py-8 text-xl rounded-2xl"
+                onClick={() => navigate('/event/create')}
               >
                 Start Planning
               </Button>
