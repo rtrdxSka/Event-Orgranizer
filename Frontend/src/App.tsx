@@ -10,6 +10,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute"
 import { GuestRoute } from "./components/GuesRoute"
 import Profile from "./pages/Profile"
 import { setNavigate } from "./lib/navigation"
+import CreateEvent from "./pages/CreateEvent"
 
 
 function App() {
@@ -25,6 +26,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        } 
+      />
+
+        <Route 
+        path="/event/create" 
+        element={
+          <ProtectedRoute>
+            <CreateEvent />
           </ProtectedRoute>
         } 
       />
