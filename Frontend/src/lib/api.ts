@@ -1,4 +1,5 @@
 import API from "@/config/apiClient";
+import { CreateEventInput, createEventValidationSchema } from './validations/event.schemas';
 
 type LoginParams = {
   email: string;
@@ -51,3 +52,22 @@ export const getSessions = async () => {
 export const deleteSessions = async (id:string) => {
   API.delete(`/sessions/${id}`);
 }
+
+
+// api/event.ts
+export const createEvent = async (data: CreateEventInput) => {
+  // Validate the data
+  const validatedData = createEventValidationSchema.parse(data);
+  
+  // Prepare the data for API
+  const apiData = {
+    ...validatedData,
+    eventDate: validatedData.eventDate ? new Date(validatedData.eventDate).toISOString() : undefined,
+  };
+  
+  // Make the API call
+  const response = await API.post('/event/create', apiData);
+  
+  // Return the data directly as it comes from the API
+  return response;
+};
