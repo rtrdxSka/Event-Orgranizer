@@ -31,8 +31,8 @@ export const ProtectedRoute = ({ children }) => {
     );
   }
 
-  if (isError) {
-    if (error?.response?.status === 401) {
+  if (isError || !user) {
+    if (error?.status === 401) {
       return <Navigate to="/login" state={{ from: location }} replace />;
     }
     return (
