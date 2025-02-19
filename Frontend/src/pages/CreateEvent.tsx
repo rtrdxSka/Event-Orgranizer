@@ -1,290 +1,484 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, MapPin, Plus, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import Navbar from '@/components/Navbar';
-import { useMutation } from '@tanstack/react-query';
-import { createEvent } from '@/lib/api';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CreateEventInput, createEventValidationSchema } from '@/lib/validations/event.schemas';
+import {
+  Calendar,
+  MapPin,
+  Plus,
+  X,
+  GripVertical,
+  Settings,
+} from "lucide-react";
+import { useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { DndProvider } from "react-dnd";
+import Navbar from "@/components/Navbar";
 
-interface CustomField {
-  key: string;
-  type: 'single' | 'multiple';
-  value: string;
-  values: string[];  // Used when type is 'multiple'
-}
+const FIELD_TYPES = {
+  TEXT: "text",
+  LIST: "list",
+};
 
-const CreateEvent = () => {
-  const navigate = useNavigate();
-  const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [error, setError] = useState('');
-
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<CreateEventInput>({
-    resolver: zodResolver(createEventValidationSchema)
-  });
-
-  const { mutate: submitEvent } = useMutation({
-    mutationFn: createEvent,
-    onSuccess: (response) => {
-      if (response?.data?.event?._id) {
-        navigate(`/event/${response.data.event._id}`);
-      } else {
-        console.log('Missing event ID in response:', response);
-        navigate('/events');
-      }
-    },
-    onError: (err: any) => {
-      if (err.status === 400) {
-        setError(err.message || 'Invalid form data');
-      } else {
-        setError(err.message || 'Failed to create event');
-      }
-    }
-  });
-
-  const addCustomField = () => {
-    setCustomFields([...customFields, { 
-      key: '', 
-      type: 'single', 
-      value: '',
-      values: [''] // Initialize with one empty input
-    }]);
-  };
-
-  const removeCustomField = (index: number) => {
-    setCustomFields(customFields.filter((_, i) => i !== index));
-  };
-
-  const updateCustomField = (index: number, field: keyof CustomField, value: string | 'single' | 'multiple') => {
-    const newFields = [...customFields];
-    if (field === 'type') {
-      newFields[index] = {
-        ...newFields[index],
-        type: value as 'single' | 'multiple',
-        values: value === 'multiple' ? [''] : [] // Reset with one empty input for multiple
-      };
-    } else {
-      newFields[index][field] = value;
-    }
-    setCustomFields(newFields);
-  };
-
-  const addValueField = (fieldIndex: number) => {
-    const newFields = [...customFields];
-    newFields[fieldIndex].values.push('');
-    setCustomFields(newFields);
-  };
-
-  const updateValueField = (fieldIndex: number, valueIndex: number, value: string) => {
-    const newFields = [...customFields];
-    newFields[fieldIndex].values[valueIndex] = value;
-    setCustomFields(newFields);
-  };
-
-  const removeValueField = (fieldIndex: number, valueIndex: number) => {
-    const newFields = [...customFields];
-    newFields[fieldIndex].values = newFields[fieldIndex].values.filter((_, i) => i !== valueIndex);
-    setCustomFields(newFields);
-  };
-
-  const onSubmit = (data: CreateEventInput) => {
-    const customFieldsObject = customFields.reduce((acc, field) => {
-      if (field.key) {
-        acc[field.key] = field.type === 'multiple' 
-          ? field.values.filter(v => v.trim() !== '')
-          : field.value;
-      }
-      return acc;
-    }, {} as Record<string, string | string[]>);
-
-    submitEvent({
-      ...data,
-      eventDate: data.eventDate || undefined, // Handle empty string case
-      customFields: Object.keys(customFieldsObject).length > 0 ? customFieldsObject : undefined
-    });
-  };
+// Draggable Field Component
+const DraggableField = ({ type }) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: "field",
+    item: { type },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }));
 
   return (
-    <div className="min-h-screen bg-purple-950">
-      <Navbar />
-      <div className="pt-20 pb-12 px-4">
-        <div className="max-w-3xl mx-auto bg-purple-900/40 rounded-xl p-8 border border-purple-700/50">
-          <h1 className="text-4xl font-bold text-purple-100 mb-8">Create New Event</h1>
-          
-          {error && (
-            <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg mb-6">
-              {error}
-            </div>
-          )}
+    <div
+      ref={drag}
+      className={`p-4 mb-2 bg-purple-800/30 rounded-lg border border-purple-600/50 cursor-move flex items-center gap-3 ${
+        isDragging ? "opacity-50" : ""
+      }`}
+    >
+      <GripVertical className="h-5 w-5 text-purple-400" />
+      <span className="text-purple-100">
+        {type === FIELD_TYPES.TEXT ? "Text Field" : "List Field"}
+      </span>
+    </div>
+  );
+};
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label className="block text-purple-100 mb-2">Event Name *</label>
-              <Input
-                {...register('name')}
-                className="bg-purple-800/50 border-purple-600 text-purple-100"
-                placeholder="Enter event name"
-              />
-              {errors.name && (
-                <p className="mt-1 text-red-400 text-sm">{errors.name.message}</p>
-              )}
-            </div>
+// Form Field Drop Zone
+const FormFieldDropZone = ({ onDrop }) => {
+  const [{ isOver }, drop] = useDrop({
+    accept: "field",
+    drop: (item) => onDrop(item.type),
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+    }),
+  });
 
-            <div>
-              <label className="block text-purple-100 mb-2">Description *</label>
-              <Textarea
-                {...register('description')}
-                className="bg-purple-800/50 border-purple-600 text-purple-100"
-                placeholder="Describe your event"
-                rows={4}
-              />
-              {errors.description && (
-                <p className="mt-1 text-red-400 text-sm">{errors.description.message}</p>
-              )}
-            </div>
+  return (
+    <div
+      ref={drop}
+      className={`min-h-[200px] rounded-lg border-2 border-dashed ${
+        isOver ? "border-purple-400 bg-purple-900/30" : "border-purple-600/50"
+      } p-4 transition-colors`}
+    >
+      {isOver ? (
+        <div className="text-purple-200 text-center">Drop field here</div>
+      ) : (
+        <div className="text-purple-400 text-center">Drag fields here</div>
+      )}
+    </div>
+  );
+};
 
-            <div>
-              <label className="block text-purple-100 mb-2">Date</label>
-              <div className="relative group cursor-pointer">
-                <Input
-                  type="datetime-local"
-                  {...register('eventDate')}
-                  className="bg-purple-800/50 border-purple-600 text-purple-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                  onClick={(e) => {
-                    const input = e.currentTarget;
-                    input.showPicker();
-                  }}
-                />
-                <Calendar 
-                  className="absolute right-3 top-2.5 h-5 w-5 text-purple-400 pointer-events-none group-hover:text-purple-200 transition-colors" 
-                />
+const CreateEventForm = () => {
+  const [formFields, setFormFields] = useState([]);
+  const [selectedFieldId, setSelectedFieldId] = useState(null);
+
+  const handleFieldDrop = (fieldType) => {
+    const baseField = {
+      type: fieldType,
+      id: Date.now(),
+      title: "New Field",
+      placeholder: "Value here",
+      value: "",
+      required: false,
+      readonly: false,
+    };
+
+    // Add list-specific properties
+    const field =
+      fieldType === FIELD_TYPES.LIST
+        ? {
+            ...baseField,
+            values: [""],
+            maxEntries: 0, // 0 means unlimited
+            allowUserAdd: true, // default to allowing users to add entries
+          }
+        : baseField;
+
+    setFormFields([...formFields, field]);
+  };
+
+  const updateFieldTitle = (id, title) => {
+    setFormFields(
+      formFields.map((field) => (field.id === id ? { ...field, title } : field))
+    );
+  };
+
+  const updateFieldValue = (id, value) => {
+    setFormFields(
+      formFields.map((field) => (field.id === id ? { ...field, value } : field))
+    );
+  };
+
+  const updateFieldSettings = (id, settings) => {
+    setFormFields(
+      formFields.map((field) =>
+        field.id === id ? { ...field, ...settings } : field
+      )
+    );
+  };
+
+  const selectedField = formFields.find((field) => field.id === selectedFieldId);
+
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <div className="min-h-screen bg-purple-950">
+        <Navbar />
+        <div className="pt-20 pb-12 px-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-12 gap-8">
+              {/* Draggable Fields Sidebar */}
+              <div className="col-span-2 bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
+                <h2 className="text-xl font-semibold text-purple-100 mb-4">
+                  Form Fields
+                </h2>
+                <div className="space-y-2">
+                  <DraggableField type={FIELD_TYPES.TEXT} />
+                  <DraggableField type={FIELD_TYPES.LIST} />
+                </div>
               </div>
-              {errors.eventDate && (
-                <p className="mt-1 text-red-400 text-sm">{errors.eventDate.message}</p>
-              )}
-            </div>
 
-            <div>
-              <label className="block text-purple-100 mb-2">Place</label>
-              <div className="relative">
-                <Input
-                  {...register('place')}
-                  className="bg-purple-800/50 border-purple-600 text-purple-100"
-                  placeholder="Enter location"
-                />
-                <MapPin className="absolute right-3 top-2.5 h-5 w-5 text-purple-400" />
-              </div>
-              {errors.place && (
-                <p className="mt-1 text-red-400 text-sm">{errors.place.message}</p>
-              )}
-            </div>
+              {/* Form Builder Area */}
+              <div className="col-span-7 bg-purple-900/40 rounded-xl p-8 border border-purple-700/50">
+                <h1 className="text-4xl font-bold text-purple-100 mb-8">
+                  Create New Event
+                </h1>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <label className="block text-purple-100">Custom Fields</label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={addCustomField}
-                  className="text-purple-100 hover:text-white hover:bg-purple-800"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Field
-                </Button>
-              </div>
-
-              {customFields.map((field, fieldIndex) => (
-                <div key={fieldIndex} className="space-y-3 bg-purple-800/20 p-4 rounded-lg">
-                  <div className="flex gap-4">
+                {/* Standard Form Fields */}
+                <div className="space-y-6 mb-8">
+                  <div>
+                    <label className="block text-purple-100 mb-2">
+                      Event Name *
+                    </label>
                     <Input
-                      value={field.key}
-                      onChange={(e) => updateCustomField(fieldIndex, 'key', e.target.value)}
                       className="bg-purple-800/50 border-purple-600 text-purple-100"
-                      placeholder="Field name"
+                      placeholder="Enter event name"
                     />
-                    <select
-                      value={field.type}
-                      onChange={(e) => updateCustomField(fieldIndex, 'type', e.target.value as 'single' | 'multiple')}
-                      className="bg-purple-800/50 border-purple-600 text-purple-100 rounded-md px-3"
-                    >
-                      <option value="single">Single Value</option>
-                      <option value="multiple">Multiple Values</option>
-                    </select>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeCustomField(fieldIndex)}
-                      className="text-purple-100 hover:text-white hover:bg-purple-800"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
                   </div>
 
-                  {field.type === 'single' ? (
-                    <Input
-                      value={field.value}
-                      onChange={(e) => updateCustomField(fieldIndex, 'value', e.target.value)}
+                  <div>
+                    <label className="block text-purple-100 mb-2">
+                      Description *
+                    </label>
+                    <Textarea
                       className="bg-purple-800/50 border-purple-600 text-purple-100"
-                      placeholder="Field value"
+                      placeholder="Describe your event"
+                      rows={4}
                     />
-                  ) : (
-                    <div className="space-y-2">
-                      {field.values.map((value, valueIndex) => (
-                        <div key={valueIndex} className="flex gap-2">
+                  </div>
+
+                  <div>
+                    <label className="block text-purple-100 mb-2">Date</label>
+                    <div className="relative group cursor-pointer">
+                      <Input
+                        type="datetime-local"
+                        className="bg-purple-800/50 border-purple-600 text-purple-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                        onClick={(e) => {
+                          const input = e.currentTarget;
+                          input.showPicker();
+                        }}
+                      />
+                      <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-purple-400 pointer-events-none group-hover:text-purple-200 transition-colors" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-purple-100 mb-2">Place</label>
+                    <div className="relative">
+                      <Input
+                        className="bg-purple-800/50 border-purple-600 text-purple-100"
+                        placeholder="Enter location"
+                      />
+                      <MapPin className="absolute right-3 top-2.5 h-5 w-5 text-purple-400" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Fields Drop Zone */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold text-purple-100 mb-4">
+                    Custom Fields
+                  </h2>
+                  <FormFieldDropZone onDrop={handleFieldDrop} />
+                </div>
+
+                {/* Added Fields Display */}
+                {formFields.length > 0 && (
+                  <div className="space-y-4 mb-8">
+                    <h3 className="text-lg font-medium text-purple-100">
+                      Added Fields
+                    </h3>
+                    {formFields.map((field) => (
+                      <div
+                        key={field.id}
+                        className="bg-purple-800/20 p-4 rounded-lg space-y-3"
+                      >
+                        <div className="flex items-center gap-2">
                           <Input
-                            value={value}
-                            onChange={(e) => updateValueField(fieldIndex, valueIndex, e.target.value)}
-                            className="bg-purple-800/50 border-purple-600 text-purple-100"
-                            placeholder={`Value ${valueIndex + 1}`}
+                            value={field.title}
+                            onChange={(e) =>
+                              updateFieldTitle(field.id, e.target.value)
+                            }
+                            className="bg-purple-800/50 border-purple-600 text-purple-100 font-medium"
+                            placeholder="Field title"
                           />
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeValueField(fieldIndex, valueIndex)}
-                            disabled={field.values.length === 1}
+                            onClick={() => setSelectedFieldId(field.id)}
+                            className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
+                              selectedFieldId === field.id
+                                ? "bg-purple-800"
+                                : ""
+                            }`}
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setFormFields(
+                                formFields.filter((f) => f.id !== field.id)
+                              );
+                              if (selectedFieldId === field.id) {
+                                setSelectedFieldId(null);
+                              }
+                            }}
                             className="text-purple-100 hover:text-white hover:bg-purple-800"
                           >
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
-                      ))}
+                        <Input
+                          value={field.value}
+                          onChange={(e) =>
+                            updateFieldValue(field.id, e.target.value)
+                          }
+                          className="bg-purple-800/50 border-purple-600 text-purple-100"
+                          placeholder={field.placeholder}
+                        />
+                        {field.type === FIELD_TYPES.LIST && (
+                          <div className="space-y-2 mt-2">
+                            {field.values.map((value, index) => (
+                              <div key={index} className="flex gap-2">
+                                <Input
+                                  value={value}
+                                  onChange={(e) => {
+                                    const newValues = [...field.values];
+                                    newValues[index] = e.target.value;
+                                    updateFieldSettings(field.id, {
+                                      values: newValues,
+                                    });
+                                  }}
+                                  className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                  placeholder={field.placeholder}
+                                />
+                                {index > 0 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      const newValues = field.values.filter(
+                                        (_, i) => i !== index
+                                      );
+                                      updateFieldSettings(field.id, {
+                                        values: newValues,
+                                      });
+                                    }}
+                                    className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                            {(!field.maxEntries ||
+                              field.values.length < field.maxEntries) && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newValues = [...field.values, ""];
+                                  updateFieldSettings(field.id, {
+                                    values: newValues,
+                                  });
+                                }}
+                                className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Entry
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    className="bg-purple-200 text-purple-950 hover:bg-purple-100"
+                  >
+                    Create Event
+                  </Button>
+                </div>
+              </div>
+
+              {/* Field Editor Sidebar */}
+              <div className="col-span-3">
+                {selectedField ? (
+                  <div className="bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-xl font-semibold text-purple-100">
+                        Edit Field
+                      </h2>
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        onClick={() => addValueField(fieldIndex)}
+                        size="icon"
+                        onClick={() => setSelectedFieldId(null)}
                         className="text-purple-100 hover:text-white hover:bg-purple-800"
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Value
+                        <X className="h-4 w-4" />
                       </Button>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
 
-            <div className="flex justify-end pt-6">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-purple-200 text-purple-950 hover:bg-purple-100"
-              >
-                {isSubmitting ? 'Creating...' : 'Create Event'}
-              </Button>
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-purple-100 mb-2">
+                          Placeholder Text
+                        </label>
+                        <Input
+                          value={selectedField.placeholder}
+                          onChange={(e) =>
+                            updateFieldSettings(selectedField.id, {
+                              placeholder: e.target.value,
+                            })
+                          }
+                          className="bg-purple-800/50 border-purple-600 text-purple-100"
+                          placeholder="Enter placeholder text"
+                        />
+                      </div>
+
+                      {/* List-specific settings */}
+                      {selectedField.type === FIELD_TYPES.LIST && (
+  <>
+    <div>
+      <label className="block text-purple-100 mb-2">Maximum Entries</label>
+      <Input
+        type="number"
+        min="0"
+        value={selectedField.maxEntries}
+        onChange={(e) =>
+          updateFieldSettings(selectedField.id, {
+            maxEntries: parseInt(e.target.value) || 0,
+          })
+        }
+        className="bg-purple-800/50 border-purple-600 text-purple-100"
+        placeholder="0 for unlimited"
+      />
+      <p className="text-purple-400 text-sm mt-1">
+        Set to 0 for unlimited entries. This limit applies to both creation and submission.
+      </p>
+    </div>
+
+    <div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="allowUserAdd"
+          checked={selectedField.allowUserAdd}
+          onChange={(e) =>
+            updateFieldSettings(selectedField.id, {
+              allowUserAdd: e.target.checked,
+            })
+          }
+          className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
+        />
+        <label htmlFor="allowUserAdd" className="text-purple-200">
+          Allow users to add entries
+        </label>
+      </div>
+      <p className="text-purple-400 text-sm mt-1">
+        This setting only applies when users fill out the form, not during creation.
+      </p>
+    </div>
+  </>
+)}
+
+<div className="space-y-4">
+  <label className="block text-purple-100">Field Options</label>
+  <div className="flex gap-4">
+    <Button
+      type="button"
+      variant={selectedField.required ? "secondary" : "ghost"}
+      className={`flex-1 ${
+        selectedField.required
+          ? "bg-purple-200 text-purple-950 hover:bg-purple-100"
+          : "text-purple-100 hover:text-white hover:bg-purple-800"
+      } ${selectedField.readonly ? "opacity-50 cursor-not-allowed" : ""}`}
+      onClick={() => {
+        if (!selectedField.readonly) {
+          updateFieldSettings(selectedField.id, {
+            required: !selectedField.required,
+          });
+        }
+      }}
+      disabled={selectedField.readonly}
+    >
+      Required
+    </Button>
+    <Button
+      type="button"
+      variant={selectedField.readonly ? "secondary" : "ghost"}
+      className={`flex-1 ${
+        selectedField.readonly
+          ? "bg-purple-200 text-purple-950 hover:bg-purple-100"
+          : "text-purple-100 hover:text-white hover:bg-purple-800"
+      } ${selectedField.required ? "opacity-50 cursor-not-allowed" : ""}`}
+      onClick={() => {
+        if (!selectedField.required) {
+          updateFieldSettings(selectedField.id, {
+            readonly: !selectedField.readonly,
+          });
+        }
+      }}
+      disabled={selectedField.required}
+    >
+      Readonly
+    </Button>
+  </div>
+  <p className="text-purple-400 text-sm">
+    These settings will apply when users fill out the form, not during creation.
+    You cannot set a field as both required and readonly.
+  </p>
+</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
+                    <p className="text-purple-300 text-center">
+                      Select a field to edit its properties
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
+    </DndProvider>
   );
 };
 
-export default CreateEvent;
+export default CreateEventForm;
