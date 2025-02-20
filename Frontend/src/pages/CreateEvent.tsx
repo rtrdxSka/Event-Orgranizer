@@ -14,6 +14,7 @@ import { useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { DndProvider } from "react-dnd";
 import Navbar from "@/components/Navbar";
+import FieldOptions from "@/components/FieldOptions";
 
 const FIELD_TYPES = {
   TEXT: "text",
@@ -141,86 +142,145 @@ const CreateEventForm = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+  
+    try {
+      // Validate fields before submission
+      // Inside handleSubmit function, replace the validation section:
+formFields.forEach(field => {
+  // Check if field has a title
+  if (!field.title.trim()) {
+    throw new Error("All fields must have a title");
+  }
 
-    // Transform custom fields into the required format
-    const customFieldsObject = formFields.reduce((acc, field) => {
-      // Base field data structure
-      const fieldData = {
-        type: field.type,
-        placeholder: field.placeholder,
-        required: field.required,
-        readonly: field.readonly,
-        title: field.title,
-      };
-
-      if (field.type === FIELD_TYPES.LIST) {
-        // For list type fields
-        fieldData.maxEntries = field.maxEntries;
-        fieldData.allowUserAdd = field.allowUserAdd;
-
-        // Get all values from the list entries
-        const allValues = [...field.values];
-        fieldData.values = allValues.filter((val) => val.trim() !== "");
+  const isOptional = !field.required && !field.readonly;
+  
+  if (field.type === FIELD_TYPES.TEXT) {
+    if (field.readonly) {
+      // For readonly text fields: must have a value
+      if (!field.value.trim()) {
+        throw new Error(`${field.title}: Read-only text fields must have a value`);
+      }
+    } else if ((field.required || isOptional) && field.value.trim() !== '') {
+      // For required/optional text fields: must be empty
+      throw new Error(
+        `${field.title}: ${field.required ? 'Required' : 'Optional'} text fields must be empty for form creation`
+      );
+    }
+  } else if (field.type === FIELD_TYPES.LIST) {
+    const nonEmptyValues = field.values.filter(v => v.trim() !== '');
+    
+    if (field.readonly) {
+      // For readonly list fields: all entries must have values
+      if (field.maxEntries > 0) {
+        // If max entries is set
+        if (field.values.length < field.maxEntries) {
+          throw new Error(
+            `${field.title}: Read-only list must have exactly ${field.maxEntries} entries. Currently has ${field.values.length}`
+          );
+        }
+        if (nonEmptyValues.length !== field.maxEntries) {
+          throw new Error(
+            `${field.title}: All ${field.maxEntries} entries in read-only list must have values`
+          );
+        }
       } else {
-        // For text type fields
-        fieldData.value = field.value;
+        // If unlimited entries
+        if (field.values.some(v => !v.trim())) {
+          throw new Error(
+            `${field.title}: All entries in read-only list must have values`
+          );
+        }
+      }
+    } else if (field.required || isOptional) {
+      // Check if we have at least one empty field or room for more entries
+      const hasEmptyField = field.values.some(v => v.trim() === '');
+      const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
+      
+      if (!hasEmptyField && !hasRoomForMore) {
+        throw new Error(
+          `${field.title}: Must have either an empty field or room for more entries`
+        );
       }
 
-      // Store under the field's title
-      acc[field.title] = fieldData;
-      return acc;
-    }, {});
-
-    const eventData = {
-      name: formData.name,
-      description: formData.description,
-      eventDate: formData.eventDate
-        ? new Date(formData.eventDate).toISOString()
-        : null,
-      place: formData.place || null,
-      customFields: customFieldsObject,
-      votingCategories: [
-        {
-          categoryName: "date",
-          options: formData.eventDate
-            ? [
-                {
-                  optionName: new Date(formData.eventDate).toISOString(),
-                  votes: [],
-                },
-              ]
-            : [],
-        },
-        {
-          categoryName: "time",
-          options: [],
-        },
-        {
-          categoryName: "place",
-          options: formData.place
-            ? [
-                {
-                  optionName: formData.place,
-                  votes: [],
-                },
-              ]
-            : [],
-        },
-      ],
-    };
-
-    // Add detailed logging to see the values
-    console.log("Raw Form Fields:", formFields);
-    console.log(
-      "List Field Values:",
-      formFields
-        .filter((f) => f.type === FIELD_TYPES.LIST)
-        .map((f) => ({
-          title: f.title,
-          values: f.values,
-        }))
-    );
-    console.log("Event Data to be submitted:", eventData);
+      // Additional validation for max entries
+      if (field.maxEntries > 0 && field.values.length < field.maxEntries) {
+        throw new Error(
+          `${field.title}: Either add ${field.maxEntries - field.values.length} more field(s) or reduce the maximum entries from ${field.maxEntries} to ${field.values.length}`
+        );
+      }
+    }
+  }
+});
+  
+      // Transform custom fields into the required format
+      const customFieldsObject = formFields.reduce((acc, field) => {
+        const isOptional = !field.required && !field.readonly;
+        
+        const fieldData = {
+          type: field.type,
+          placeholder: field.placeholder,
+          required: field.required,
+          readonly: field.readonly,
+          optional: isOptional,
+          title: field.title,
+        };
+  
+        if (field.type === FIELD_TYPES.LIST) {
+          fieldData.maxEntries = field.maxEntries;
+          fieldData.allowUserAdd = field.allowUserAdd;
+          // Only include non-empty values for readonly fields
+          fieldData.values = field.readonly 
+            ? field.values.filter(v => v.trim() !== '')
+            : field.values;
+        } else {
+          // Only include value for readonly fields
+          fieldData.value = field.readonly ? field.value : '';
+        }
+  
+        acc[field.title] = fieldData;
+        return acc;
+      }, {});
+  
+      const eventData = {
+        name: formData.name,
+        description: formData.description,
+        eventDate: formData.eventDate
+          ? new Date(formData.eventDate).toISOString()
+          : null,
+        place: formData.place || null,
+        customFields: customFieldsObject,
+        votingCategories: [
+          {
+            categoryName: "date",
+            options: formData.eventDate
+              ? [{ optionName: new Date(formData.eventDate).toISOString(), votes: [] }]
+              : [],
+          },
+          {
+            categoryName: "time",
+            options: [],
+          },
+          {
+            categoryName: "place",
+            options: formData.place
+              ? [{ optionName: formData.place, votes: [] }]
+              : [],
+          },
+        ],
+      };
+  
+      console.log("Form Fields:", formFields);
+      console.log("Custom Fields Object:", customFieldsObject);
+      console.log("Event Data:", eventData);
+      
+      // Here you would submit the data
+      // await submitEvent(eventData);
+      
+    } catch (error) {
+      console.error("Form submission error:", error.message);
+      // You should show this error to the user in your UI
+      alert(error.message); // Replace with proper error handling UI
+    }
   };
   return (
     <DndProvider backend={HTML5Backend}>
@@ -328,112 +388,121 @@ const CreateEventForm = () => {
                         Added Fields
                       </h3>
                       {formFields.map((field) => (
-  <div
-    key={field.id}
-    className="bg-purple-800/20 p-4 rounded-lg space-y-3"
-  >
-    <div className="flex items-center gap-2">
-      <Input
-        value={field.title}
-        onChange={(e) =>
-          updateFieldTitle(field.id, e.target.value)
-        }
-        className="bg-purple-800/50 border-purple-600 text-purple-100 font-medium"
-        placeholder="Field title"
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={() => setSelectedFieldId(field.id)}
-        className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
-          selectedFieldId === field.id ? "bg-purple-800" : ""
-        }`}
-      >
-        <Settings className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setFormFields(formFields.filter((f) => f.id !== field.id));
-          if (selectedFieldId === field.id) {
-            setSelectedFieldId(null);
-          }
-        }}
-        className="text-purple-100 hover:text-white hover:bg-purple-800"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-    
-    {/* Only show single value input for text fields */}
-    {field.type === FIELD_TYPES.TEXT && (
-      <Input
-        value={field.value}
-        onChange={(e) => updateFieldValue(field.id, e.target.value)}
-        className="bg-purple-800/50 border-purple-600 text-purple-100"
-        placeholder={field.placeholder}
-      />
-    )}
-    
-    {/* List field rendering */}
-    {field.type === FIELD_TYPES.LIST && (
-      <div className="space-y-2 mt-2">
-        {field.values.map((value, index) => (
-          <div key={index} className="flex gap-2">
-            <Input
-              value={value}
-              onChange={(e) => {
-                const newValues = [...field.values];
-                newValues[index] = e.target.value;
-                updateFieldSettings(field.id, {
-                  values: newValues,
-                });
-              }}
-              className="bg-purple-800/50 border-purple-600 text-purple-100"
-              placeholder={field.placeholder}
-            />
-            {field.values.length > 1 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  const newValues = field.values.filter((_, i) => i !== index);
-                  updateFieldSettings(field.id, {
-                    values: newValues,
-                  });
-                }}
-                className="text-purple-100 hover:text-white hover:bg-purple-800"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        ))}
-        {(!field.maxEntries || field.values.length < field.maxEntries) && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const newValues = [...field.values, ""];
-              updateFieldSettings(field.id, {
-                values: newValues,
-              });
-            }}
-            className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Entry
-          </Button>
-        )}
-      </div>
-    )}
-  </div>
-))}
+                        <div
+                          key={field.id}
+                          className="bg-purple-800/20 p-4 rounded-lg space-y-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={field.title}
+                              onChange={(e) =>
+                                updateFieldTitle(field.id, e.target.value)
+                              }
+                              className="bg-purple-800/50 border-purple-600 text-purple-100 font-medium"
+                              placeholder="Field title"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedFieldId(field.id)}
+                              className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
+                                selectedFieldId === field.id
+                                  ? "bg-purple-800"
+                                  : ""
+                              }`}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setFormFields(
+                                  formFields.filter((f) => f.id !== field.id)
+                                );
+                                if (selectedFieldId === field.id) {
+                                  setSelectedFieldId(null);
+                                }
+                              }}
+                              className="text-purple-100 hover:text-white hover:bg-purple-800"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          {/* Only show single value input for text fields */}
+                          {field.type === FIELD_TYPES.TEXT && (
+                            <Input
+                              value={field.value}
+                              onChange={(e) =>
+                                updateFieldValue(field.id, e.target.value)
+                              }
+                              className="bg-purple-800/50 border-purple-600 text-purple-100"
+                              placeholder={field.placeholder}
+                            />
+                          )}
+
+                          {/* List field rendering */}
+                          {field.type === FIELD_TYPES.LIST && (
+                            <div className="space-y-2 mt-2">
+                              {field.values.map((value, index) => (
+                                <div key={index} className="flex gap-2">
+                                  <Input
+                                    value={value}
+                                    onChange={(e) => {
+                                      const newValues = [...field.values];
+                                      newValues[index] = e.target.value;
+                                      updateFieldSettings(field.id, {
+                                        values: newValues,
+                                      });
+                                    }}
+                                    className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                    placeholder={field.placeholder}
+                                  />
+                                  {field.values.length > 1 && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const newValues = field.values.filter(
+                                          (_, i) => i !== index
+                                        );
+                                        updateFieldSettings(field.id, {
+                                          values: newValues,
+                                        });
+                                      }}
+                                      className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                              {(!field.maxEntries ||
+                                field.values.length < field.maxEntries) && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newValues = [...field.values, ""];
+                                    updateFieldSettings(field.id, {
+                                      values: newValues,
+                                    });
+                                  }}
+                                  className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Entry
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -536,8 +605,11 @@ const CreateEventForm = () => {
                             </div>
                           </>
                         )}
-
-                        <div className="space-y-4">
+                          <FieldOptions 
+  field={selectedField} 
+  onUpdate={(updates) => updateFieldSettings(selectedField.id, updates)} 
+/>
+                        {/* <div className="space-y-4">
                           <label className="block text-purple-100">
                             Field Options
                           </label>
@@ -598,7 +670,7 @@ const CreateEventForm = () => {
                             form, not during creation. You cannot set a field as
                             both required and readonly.
                           </p>
-                        </div>
+                        </div> */}
                       </div>
                     </div>
                   ) : (
