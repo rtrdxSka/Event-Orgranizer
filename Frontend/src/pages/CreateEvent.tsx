@@ -279,10 +279,9 @@ formFields.forEach(field => {
             id: opt.id,
             label: opt.label
           }));
-          if (field.readonly) {
-            fieldData.selectedOption = field.selectedOption;
-          }
+  
         }
+
   
         if (field.type === FIELD_TYPES.LIST) {
           fieldData.maxEntries = field.maxEntries;
@@ -327,6 +326,19 @@ formFields.forEach(field => {
           },
         ],
       };
+      
+      // Add radio fields as voting categories (only once)
+      formFields.forEach(field => {
+        if (field.type === FIELD_TYPES.RADIO) {
+          eventData.votingCategories.push({
+            categoryName: field.title,
+            options: field.options.map(opt => ({
+              optionName: opt.label,
+              votes: []
+            }))
+          });
+        }
+      });
   
       console.log("Form Fields:", formFields);
       console.log("Custom Fields Object:", customFieldsObject);
