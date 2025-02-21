@@ -166,50 +166,61 @@ formFields.forEach(field => {
         `${field.title}: ${field.required ? 'Required' : 'Optional'} text fields must be empty for form creation`
       );
     }
-  } else if (field.type === FIELD_TYPES.LIST) {
-    const nonEmptyValues = field.values.filter(v => v.trim() !== '');
-    
-    if (field.readonly) {
-      // For readonly list fields: all entries must have values
-      if (field.maxEntries > 0) {
-        // If max entries is set
-        if (field.values.length < field.maxEntries) {
-          throw new Error(
-            `${field.title}: Read-only list must have exactly ${field.maxEntries} entries. Currently has ${field.values.length}`
-          );
-        }
-        if (nonEmptyValues.length !== field.maxEntries) {
-          throw new Error(
-            `${field.title}: All ${field.maxEntries} entries in read-only list must have values`
-          );
-        }
-      } else {
-        // If unlimited entries
-        if (field.values.some(v => !v.trim())) {
-          throw new Error(
-            `${field.title}: All entries in read-only list must have values`
-          );
-        }
-      }
-    } else if (field.required || isOptional) {
-      // Check if we have at least one empty field or room for more entries
-      const hasEmptyField = field.values.some(v => v.trim() === '');
-      const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
-      
-      if (!hasEmptyField && !hasRoomForMore) {
+ // Inside handleSubmit function, replace the list field validation section:
+} else if (field.type === FIELD_TYPES.LIST) {
+  const nonEmptyValues = field.values.filter(v => v.trim() !== '');
+  
+  if (field.readonly) {
+    // For readonly list fields: all entries must have values
+    if (field.maxEntries > 0) {
+      // If max entries is set
+      if (field.values.length < field.maxEntries) {
         throw new Error(
-          `${field.title}: Must have either an empty field or room for more entries`
+          `${field.title}: Read-only list must have exactly ${field.maxEntries} entries. Currently has ${field.values.length}`
         );
       }
-
-      // Additional validation for max entries
-      if (field.maxEntries > 0 && field.values.length < field.maxEntries) {
+      if (nonEmptyValues.length !== field.maxEntries) {
         throw new Error(
-          `${field.title}: Either add ${field.maxEntries - field.values.length} more field(s) or reduce the maximum entries from ${field.maxEntries} to ${field.values.length}`
+          `${field.title}: All ${field.maxEntries} entries in read-only list must have values`
+        );
+      }
+    } else {
+      // If unlimited entries
+      if (field.values.some(v => !v.trim())) {
+        throw new Error(
+          `${field.title}: All entries in read-only list must have values`
         );
       }
     }
+  } else if (field.required || !field.required) { // Handle both required and optional cases
+    const hasEmptyField = field.values.some(v => v.trim() === '');
+    const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
+    
+    // Check if users can add entries
+    if (!field.allowUserAdd) {
+      // If users can't add entries, we must provide an empty field
+      if (!hasEmptyField) {
+        throw new Error(
+          `${field.title}: Must include an empty field for user input since users cannot add their own entries`
+        );
+      }
+    } else {
+      // If users can add entries, either need an empty field or room for more
+      if (!hasEmptyField && !hasRoomForMore) {
+        throw new Error(
+          `${field.title}: Must either have an empty field or room for more entries`
+        );
+      }
+    }
+
+    // Additional validation for max entries
+    if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
+      throw new Error(
+        `${field.title}: Number of fields (${field.values.length}) exceeds maximum allowed (${field.maxEntries})`
+      );
+    }
   }
+}
 });
   
       // Transform custom fields into the required format
