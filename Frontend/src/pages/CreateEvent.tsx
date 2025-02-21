@@ -19,6 +19,7 @@ import FieldOptions from "@/components/FieldOptions";
 const FIELD_TYPES = {
   TEXT: "text",
   LIST: "list",
+  RADIO: "radio"
 };
 
 // Draggable Field Component
@@ -40,7 +41,8 @@ const DraggableField = ({ type }) => {
     >
       <GripVertical className="h-5 w-5 text-purple-400" />
       <span className="text-purple-100">
-        {type === FIELD_TYPES.TEXT ? "Text Field" : "List Field"}
+        {type === FIELD_TYPES.TEXT ? "Text Field" : 
+         type === FIELD_TYPES.LIST ? "List Field" : "Radio Field"}
       </span>
     </div>
   );
@@ -101,18 +103,28 @@ const CreateEventForm = () => {
       required: false,
       readonly: false,
     };
-
-    // Add list-specific properties
-    const field =
-      fieldType === FIELD_TYPES.LIST
-        ? {
-            ...baseField,
-            values: [""], // Initialize with just one empty value
-            maxEntries: 0, // 0 means unlimited
-            allowUserAdd: true, // default to allowing users to add entries
-          }
-        : baseField;
-
+  
+    let field;
+    if (fieldType === FIELD_TYPES.LIST) {
+      field = {
+        ...baseField,
+        values: [""],
+        maxEntries: 0,
+        allowUserAdd: true,
+      };
+    } else if (fieldType === FIELD_TYPES.RADIO) {
+      field = {
+        ...baseField,
+        options: [
+          { id: Date.now(), label: "Option 1" },
+          { id: Date.now() + 1, label: "Option 2" }
+        ],
+        selectedOption: null
+      };
+    } else {
+      field = baseField;
+    }
+  
     setFormFields([...formFields, field]);
   };
 
@@ -204,7 +216,9 @@ formFields.forEach(field => {
           `${field.title}: Must include an empty field for user input since users cannot add their own entries`
         );
       }
-    } else {
+    } 
+    
+    else {
       // If users can add entries, either need an empty field or room for more
       if (!hasEmptyField && !hasRoomForMore) {
         throw new Error(
@@ -217,6 +231,30 @@ formFields.forEach(field => {
     if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
       throw new Error(
         `${field.title}: Number of fields (${field.values.length}) exceeds maximum allowed (${field.maxEntries})`
+      );
+    }
+  }
+}else if (field.type === FIELD_TYPES.RADIO) {
+  // Check if all options have labels
+  if (field.options.some(opt => !opt.label.trim())) {
+    throw new Error(`${field.title}: All radio options must have labels`);
+  }
+
+  // Need at least 2 options
+  if (field.options.length < 2) {
+    throw new Error(`${field.title}: Radio fields must have at least 2 options`);
+  }
+
+  if (field.readonly) {
+    // For readonly fields, must have a selected option
+    if (!field.selectedOption) {
+      throw new Error(`${field.title}: Read-only radio fields must have a selected option`);
+    }
+  } else {
+    // For required/optional fields, should not have a selection during creation
+    if (field.selectedOption) {
+      throw new Error(
+        `${field.title}: ${field.required ? 'Required' : 'Optional'} radio fields should not have a selection during creation`
       );
     }
   }
@@ -235,6 +273,16 @@ formFields.forEach(field => {
           optional: isOptional,
           title: field.title,
         };
+
+        if (field.type === FIELD_TYPES.RADIO) {
+          fieldData.options = field.options.map(opt => ({
+            id: opt.id,
+            label: opt.label
+          }));
+          if (field.readonly) {
+            fieldData.selectedOption = field.selectedOption;
+          }
+        }
   
         if (field.type === FIELD_TYPES.LIST) {
           fieldData.maxEntries = field.maxEntries;
@@ -309,6 +357,7 @@ formFields.forEach(field => {
                   <div className="space-y-2">
                     <DraggableField type={FIELD_TYPES.TEXT} />
                     <DraggableField type={FIELD_TYPES.LIST} />
+                    <DraggableField type={FIELD_TYPES.RADIO} />
                   </div>
                 </div>
 
@@ -454,6 +503,65 @@ formFields.forEach(field => {
                               placeholder={field.placeholder}
                             />
                           )}
+
+                          {/* Add this alongside your text and list field conditions */}
+{field.type === FIELD_TYPES.RADIO && (
+  <div className="space-y-2 mt-2">
+    {field.options.map((option) => (
+      <div key={option.id} className="flex items-center gap-2">
+        <input
+          type="radio"
+          checked={field.selectedOption === option.id}
+          onChange={() => 
+            updateFieldSettings(field.id, { selectedOption: option.id })
+          }
+          className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+        />
+        <Input
+          value={option.label}
+          onChange={(e) => {
+            const newOptions = field.options.map(opt =>
+              opt.id === option.id ? { ...opt, label: e.target.value } : opt
+            );
+            updateFieldSettings(field.id, { options: newOptions });
+          }}
+          className="bg-purple-800/50 border-purple-600 text-purple-100"
+          placeholder="Option label"
+        />
+        {field.options.length > 2 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              const newOptions = field.options.filter(opt => opt.id !== option.id);
+              updateFieldSettings(field.id, { options: newOptions });
+            }}
+            className="text-purple-100 hover:text-white hover:bg-purple-800"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    ))}
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        const newOptions = [
+          ...field.options,
+          { id: Date.now(), label: "" }
+        ];
+        updateFieldSettings(field.id, { options: newOptions });
+      }}
+      className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      Add Option
+    </Button>
+  </div>
+)}
 
                           {/* List field rendering */}
                           {field.type === FIELD_TYPES.LIST && (
