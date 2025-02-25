@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState  } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,17 +16,75 @@ import { DndProvider } from "react-dnd";
 import Navbar from "@/components/Navbar";
 import FieldOptions from "@/components/FieldOptions";
 
-const FIELD_TYPES = {
+type FieldType = 'text' | 'list' | 'radio';
+
+const FIELD_TYPES: Record<string, FieldType> = {
   TEXT: "text",
   LIST: "list",
   RADIO: "radio"
 };
 
+interface BaseField {
+  id: number;
+  type: FieldType;
+  title: string;
+  placeholder: string;
+  value: string;
+  required: boolean;
+  readonly: boolean;
+}
+
+interface TextField extends BaseField {
+  type: 'text';
+}
+
+interface RadioField extends BaseField {
+  type: 'radio';
+  options: Array<{
+    id: number;
+    label: string;
+  }>;
+  selectedOption: number | null;
+}
+
+interface ListField extends BaseField {
+  type: 'list';
+  values: string[];
+  maxEntries: number;
+  allowUserAdd: boolean;
+}
+
+type Field = TextField | ListField | RadioField;
+
+type TextFieldSettings = Partial<Omit<TextField, 'id' | 'type'>>;
+type ListFieldSettings = Partial<Omit<ListField, 'id' | 'type'>>;
+type RadioFieldSettings = Partial<Omit<RadioField, 'id' | 'type'>>;
+type FieldSettings = TextFieldSettings | ListFieldSettings | RadioFieldSettings;
+
+interface EventFormData {
+  name: string;
+  description: string;
+  eventDate: string;
+  place: string;
+}
+
+interface DragItem {
+  type: FieldType;
+}
+
+interface FormFieldDropZoneProps {
+  onDrop: (type: FieldType) => void;
+}
+
+interface DraggableFieldProps {
+  type: FieldType;
+}
+
 // Draggable Field Component
-const DraggableField = ({ type }) => {
+const DraggableField = ({ type }: DraggableFieldProps) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: "field",
-    item: { type },
+    item: { type } as DragItem,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
@@ -49,10 +107,10 @@ const DraggableField = ({ type }) => {
 };
 
 // Form Field Drop Zone
-const FormFieldDropZone = ({ onDrop }) => {
+const FormFieldDropZone = ({ onDrop }: FormFieldDropZoneProps) => {
   const [{ isOver }, drop] = useDrop({
     accept: "field",
-    drop: (item) => onDrop(item.type),
+    drop: (item: DragItem) => onDrop(item.type),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     }),
@@ -75,72 +133,83 @@ const FormFieldDropZone = ({ onDrop }) => {
 };
 
 const CreateEventForm = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<EventFormData>({
     name: "",
     description: "",
     eventDate: "",
     place: "",
   });
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
+    setFormData((prev: EventFormData) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const [formFields, setFormFields] = useState([]);
-  const [selectedFieldId, setSelectedFieldId] = useState(null);
+  const [formFields, setFormFields] = useState<Field[]>([]);
+  const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
 
-  const handleFieldDrop = (fieldType) => {
-    const baseField = {
-      type: fieldType,
-      id: Date.now(),
-      title: "New Field",
-      placeholder: "Value here",
-      value: "",
-      required: false,
-      readonly: false,
-    };
-  
-    let field;
+  const handleFieldDrop = (fieldType: FieldType): void => {
+    // Create the appropriate field based on type
     if (fieldType === FIELD_TYPES.LIST) {
-      field = {
-        ...baseField,
+      const listField: ListField = {
+        type: 'list',
+        id: Date.now(),
+        title: "New Field",
+        placeholder: "Value here",
+        value: "",
+        required: false,
+        readonly: false,
         values: [""],
         maxEntries: 0,
         allowUserAdd: true,
       };
+      setFormFields([...formFields, listField]);
     } else if (fieldType === FIELD_TYPES.RADIO) {
-      field = {
-        ...baseField,
+      const radioField: RadioField = {
+        type: 'radio',
+        id: Date.now(),
+        title: "New Field",
+        placeholder: "Value here",
+        value: "",
+        required: false,
+        readonly: false,
         options: [
           { id: Date.now(), label: "Option 1" },
           { id: Date.now() + 1, label: "Option 2" }
         ],
         selectedOption: null
       };
+      setFormFields([...formFields, radioField]);
     } else {
-      field = baseField;
+      const textField: TextField = {
+        type: 'text',
+        id: Date.now(),
+        title: "New Field",
+        placeholder: "Value here",
+        value: "",
+        required: false,
+        readonly: false
+      };
+      setFormFields([...formFields, textField]);
     }
-  
-    setFormFields([...formFields, field]);
   };
 
-  const updateFieldTitle = (id, title) => {
+  const updateFieldTitle = (id:number, title:string) => {
     setFormFields(
       formFields.map((field) => (field.id === id ? { ...field, title } : field))
     );
   };
 
-  const updateFieldValue = (id, value) => {
+  const updateFieldValue = (id:number, value:string) => {
     setFormFields(
       formFields.map((field) => (field.id === id ? { ...field, value } : field))
     );
   };
 
-  const updateFieldSettings = (id, settings) => {
+  const updateFieldSettings = (id: number, settings: FieldSettings): void => {
     setFormFields(
       formFields.map((field) =>
         field.id === id ? { ...field, ...settings } : field
@@ -152,7 +221,7 @@ const CreateEventForm = () => {
     (field) => field.id === selectedFieldId
   );
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
   
     try {
@@ -180,36 +249,37 @@ formFields.forEach(field => {
     }
  // Inside handleSubmit function, replace the list field validation section:
 } else if (field.type === FIELD_TYPES.LIST) {
-  const nonEmptyValues = field.values.filter(v => v.trim() !== '');
+  const listField = field as ListField;
+  const nonEmptyValues = listField.values.filter(v => v.trim() !== '');
   
   if (field.readonly) {
     // For readonly list fields: all entries must have values
-    if (field.maxEntries > 0) {
+    if (listField.maxEntries > 0) {
       // If max entries is set
-      if (field.values.length < field.maxEntries) {
+      if (listField.values.length < listField.maxEntries) {
         throw new Error(
-          `${field.title}: Read-only list must have exactly ${field.maxEntries} entries. Currently has ${field.values.length}`
+          `${field.title}: Read-only list must have exactly ${listField.maxEntries} entries. Currently has ${listField.values.length}`
         );
       }
-      if (nonEmptyValues.length !== field.maxEntries) {
+      if (nonEmptyValues.length !== listField.maxEntries) {
         throw new Error(
-          `${field.title}: All ${field.maxEntries} entries in read-only list must have values`
+          `${field.title}: All ${listField.maxEntries} entries in read-only list must have values`
         );
       }
     } else {
       // If unlimited entries
-      if (field.values.some(v => !v.trim())) {
+      if (listField.values.some(v => !v.trim())) {
         throw new Error(
           `${field.title}: All entries in read-only list must have values`
         );
       }
     }
   } else if (field.required || !field.required) { // Handle both required and optional cases
-    const hasEmptyField = field.values.some(v => v.trim() === '');
-    const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
+    const hasEmptyField = listField.values.some(v => v.trim() === '');
+    const hasRoomForMore = listField.maxEntries === 0 || listField.values.length < listField.maxEntries;
     
     // Check if users can add entries
-    if (!field.allowUserAdd) {
+    if (!listField.allowUserAdd) {
       // If users can't add entries, we must provide an empty field
       if (!hasEmptyField) {
         throw new Error(
@@ -228,31 +298,32 @@ formFields.forEach(field => {
     }
 
     // Additional validation for max entries
-    if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
+    if (listField.maxEntries > 0 && listField.values.length > listField.maxEntries) {
       throw new Error(
-        `${field.title}: Number of fields (${field.values.length}) exceeds maximum allowed (${field.maxEntries})`
+        `${field.title}: Number of fields (${listField.values.length}) exceeds maximum allowed (${listField.maxEntries})`
       );
     }
   }
 }else if (field.type === FIELD_TYPES.RADIO) {
+  const radioField = field as RadioField;
   // Check if all options have labels
-  if (field.options.some(opt => !opt.label.trim())) {
+  if (radioField.options.some(opt => !opt.label.trim())) {
     throw new Error(`${field.title}: All radio options must have labels`);
   }
 
   // Need at least 2 options
-  if (field.options.length < 2) {
+  if (radioField.options.length < 2) {
     throw new Error(`${field.title}: Radio fields must have at least 2 options`);
   }
 
   if (field.readonly) {
     // For readonly fields, must have a selected option
-    if (!field.selectedOption) {
+    if (!radioField.selectedOption) {
       throw new Error(`${field.title}: Read-only radio fields must have a selected option`);
     }
   } else {
     // For required/optional fields, should not have a selection during creation
-    if (field.selectedOption) {
+    if (radioField.selectedOption) {
       throw new Error(
         `${field.title}: ${field.required ? 'Required' : 'Optional'} radio fields should not have a selection during creation`
       );
@@ -260,12 +331,27 @@ formFields.forEach(field => {
   }
 }
 });
+
+interface CustomFieldData {
+  type: FieldType;
+  placeholder: string;
+  required: boolean;
+  readonly: boolean;
+  optional: boolean;
+  title: string;
+  value?: string;
+  values?: string[];
+  maxEntries?: number;
+  allowUserAdd?: boolean;
+  options?: Array<{ id: number; label: string }>;
+  selectedOption?: number | null;
+}
   
       // Transform custom fields into the required format
-      const customFieldsObject = formFields.reduce((acc, field) => {
+      const customFieldsObject = formFields.reduce((acc: Record<string, CustomFieldData>, field) => {
         const isOptional = !field.required && !field.readonly;
         
-        const fieldData = {
+        const fieldData:CustomFieldData  = {
           type: field.type,
           placeholder: field.placeholder,
           required: field.required,
@@ -275,7 +361,8 @@ formFields.forEach(field => {
         };
 
         if (field.type === FIELD_TYPES.RADIO) {
-          fieldData.options = field.options.map(opt => ({
+          const radioField = field as RadioField;
+          fieldData.options = radioField.options.map(opt => ({
             id: opt.id,
             label: opt.label
           }));
@@ -284,12 +371,13 @@ formFields.forEach(field => {
 
   
         if (field.type === FIELD_TYPES.LIST) {
-          fieldData.maxEntries = field.maxEntries;
-          fieldData.allowUserAdd = field.allowUserAdd;
+          const listField = field as ListField;
+          fieldData.maxEntries = listField.maxEntries;
+          fieldData.allowUserAdd = listField.allowUserAdd;
           // Only include non-empty values for readonly fields
           fieldData.values = field.readonly 
-            ? field.values.filter(v => v.trim() !== '')
-            : field.values;
+            ? listField.values.filter(v => v.trim() !== '')
+            : listField.values;
         } else {
           // Only include value for readonly fields
           fieldData.value = field.readonly ? field.value : '';
@@ -329,10 +417,11 @@ formFields.forEach(field => {
       
       // Add radio fields as voting categories (only once)
       formFields.forEach(field => {
+        const radioField = field as RadioField;
         if (field.type === FIELD_TYPES.RADIO) {
           eventData.votingCategories.push({
             categoryName: field.title,
-            options: field.options.map(opt => ({
+            options: radioField.options.map(opt => ({
               optionName: opt.label,
               votes: []
             }))
@@ -348,9 +437,14 @@ formFields.forEach(field => {
       // await submitEvent(eventData);
       
     } catch (error) {
-      console.error("Form submission error:", error.message);
+      // Create a properly typed error object
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unknown error occurred';
+        
+      console.error("Form submission error:", errorMessage);
       // You should show this error to the user in your UI
-      alert(error.message); // Replace with proper error handling UI
+      alert(errorMessage); // Replace with proper error handling UI
     }
   };
   return (
@@ -517,73 +611,77 @@ formFields.forEach(field => {
                           )}
 
                           {/* Add this alongside your text and list field conditions */}
-{field.type === FIELD_TYPES.RADIO && (
-  <div className="space-y-2 mt-2">
-    {field.options.map((option) => (
-      <div key={option.id} className="flex items-center gap-2">
-        <input
-          type="radio"
-          checked={field.selectedOption === option.id}
-          onChange={() => 
-            updateFieldSettings(field.id, { selectedOption: option.id })
-          }
-          className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-        />
-        <Input
-          value={option.label}
-          onChange={(e) => {
-            const newOptions = field.options.map(opt =>
-              opt.id === option.id ? { ...opt, label: e.target.value } : opt
-            );
-            updateFieldSettings(field.id, { options: newOptions });
-          }}
-          className="bg-purple-800/50 border-purple-600 text-purple-100"
-          placeholder="Option label"
-        />
-        {field.options.length > 2 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              const newOptions = field.options.filter(opt => opt.id !== option.id);
-              updateFieldSettings(field.id, { options: newOptions });
-            }}
-            className="text-purple-100 hover:text-white hover:bg-purple-800"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-    ))}
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      onClick={() => {
-        const newOptions = [
-          ...field.options,
-          { id: Date.now(), label: "" }
-        ];
-        updateFieldSettings(field.id, { options: newOptions });
-      }}
-      className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-    >
-      <Plus className="h-4 w-4 mr-2" />
-      Add Option
-    </Button>
-  </div>
-)}
-
+ {/* Radio field rendering */}
+ {field.type === FIELD_TYPES.RADIO && (() => {
+                            // Create a properly typed variable once for this section
+                            const radioField = field as RadioField;
+                            return (
+                              <div className="space-y-2 mt-2">
+                                {radioField.options.map((option) => (
+                                  <div key={option.id} className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      checked={radioField.selectedOption === option.id}
+                                      onChange={() => 
+                                        updateFieldSettings(field.id, { selectedOption: option.id })
+                                      }
+                                      className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                                    />
+                                    <Input
+                                      value={option.label}
+                                      onChange={(e) => {
+                                        const newOptions = radioField.options.map(opt =>
+                                          opt.id === option.id ? { ...opt, label: e.target.value } : opt
+                                        );
+                                        updateFieldSettings(field.id, { options: newOptions });
+                                      }}
+                                      className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                      placeholder="Option label"
+                                    />
+                                    {(radioField.options.length > 2) && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          const newOptions = radioField.options.filter(opt => opt.id !== option.id);
+                                          updateFieldSettings(field.id, { options: newOptions });
+                                        }}
+                                        className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newOptions = [
+                                      ...radioField.options,
+                                      { id: Date.now(), label: "" }
+                                    ];
+                                    updateFieldSettings(field.id, { options: newOptions });
+                                  }}
+                                  className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Option
+                                </Button>
+                              </div>
+                            );
+                          })()}
                           {/* List field rendering */}
                           {field.type === FIELD_TYPES.LIST && (
                             <div className="space-y-2 mt-2">
-                              {field.values.map((value, index) => (
+                              {(field as ListField).values.map((value, index) => (
                                 <div key={index} className="flex gap-2">
                                   <Input
                                     value={value}
                                     onChange={(e) => {
-                                      const newValues = [...field.values];
+                                      const newValues = [...(field as ListField).values];
                                       newValues[index] = e.target.value;
                                       updateFieldSettings(field.id, {
                                         values: newValues,
@@ -592,13 +690,13 @@ formFields.forEach(field => {
                                     className="bg-purple-800/50 border-purple-600 text-purple-100"
                                     placeholder={field.placeholder}
                                   />
-                                  {field.values.length > 1 && (
+                                  {(field as ListField).values.length > 1 && (
                                     <Button
                                       type="button"
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => {
-                                        const newValues = field.values.filter(
+                                        const newValues = (field as ListField).values.filter(
                                           (_, i) => i !== index
                                         );
                                         updateFieldSettings(field.id, {
@@ -612,14 +710,14 @@ formFields.forEach(field => {
                                   )}
                                 </div>
                               ))}
-                              {(!field.maxEntries ||
-                                field.values.length < field.maxEntries) && (
+                              {(!(field as ListField).maxEntries ||
+                                (field as ListField).values.length < (field as ListField).maxEntries) && (
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
-                                    const newValues = [...field.values, ""];
+                                    const newValues = [...(field as ListField).values, ""];
                                     updateFieldSettings(field.id, {
                                       values: newValues,
                                     });
@@ -694,7 +792,7 @@ formFields.forEach(field => {
                               <Input
                                 type="number"
                                 min="0"
-                                value={selectedField.maxEntries}
+                                value={(selectedField as ListField).maxEntries}
                                 onChange={(e) =>
                                   updateFieldSettings(selectedField.id, {
                                     maxEntries: parseInt(e.target.value) || 0,
@@ -714,7 +812,7 @@ formFields.forEach(field => {
                                 <input
                                   type="checkbox"
                                   id="allowUserAdd"
-                                  checked={selectedField.allowUserAdd}
+                                  checked={(selectedField as ListField).allowUserAdd}
                                   onChange={(e) =>
                                     updateFieldSettings(selectedField.id, {
                                       allowUserAdd: e.target.checked,
@@ -738,70 +836,8 @@ formFields.forEach(field => {
                         )}
                           <FieldOptions 
   field={selectedField} 
-  onUpdate={(updates) => updateFieldSettings(selectedField.id, updates)} 
+  onUpdate={(updates: FieldSettings) => updateFieldSettings(selectedField.id, updates)} 
 />
-                        {/* <div className="space-y-4">
-                          <label className="block text-purple-100">
-                            Field Options
-                          </label>
-                          <div className="flex gap-4">
-                            <Button
-                              type="button"
-                              variant={
-                                selectedField.required ? "secondary" : "ghost"
-                              }
-                              className={`flex-1 ${
-                                selectedField.required
-                                  ? "bg-purple-200 text-purple-950 hover:bg-purple-100"
-                                  : "text-purple-100 hover:text-white hover:bg-purple-800"
-                              } ${
-                                selectedField.readonly
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                              onClick={() => {
-                                if (!selectedField.readonly) {
-                                  updateFieldSettings(selectedField.id, {
-                                    required: !selectedField.required,
-                                  });
-                                }
-                              }}
-                              disabled={selectedField.readonly}
-                            >
-                              Required
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                selectedField.readonly ? "secondary" : "ghost"
-                              }
-                              className={`flex-1 ${
-                                selectedField.readonly
-                                  ? "bg-purple-200 text-purple-950 hover:bg-purple-100"
-                                  : "text-purple-100 hover:text-white hover:bg-purple-800"
-                              } ${
-                                selectedField.required
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                              onClick={() => {
-                                if (!selectedField.required) {
-                                  updateFieldSettings(selectedField.id, {
-                                    readonly: !selectedField.readonly,
-                                  });
-                                }
-                              }}
-                              disabled={selectedField.required}
-                            >
-                              Readonly
-                            </Button>
-                          </div>
-                          <p className="text-purple-400 text-sm">
-                            These settings will apply when users fill out the
-                            form, not during creation. You cannot set a field as
-                            both required and readonly.
-                          </p>
-                        </div> */}
                       </div>
                     </div>
                   ) : (
