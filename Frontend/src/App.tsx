@@ -56,14 +56,10 @@ function App() {
           </GuestRoute>
         } 
       />
-      <Route 
-        path="/email/verify/:code" 
-        element={
-          <GuestRoute>
-            <VerifyEmail />
-          </GuestRoute>
-        } 
-      />
+      <Route
+  path="/email/verify/:code"
+  element={<VerifyEmail />}
+/>
       <Route 
         path="/password/forgot" 
         element={
