@@ -1,5 +1,6 @@
 import API from "@/config/apiClient";
 import { CreateEventInput, createEventValidationSchema } from './validations/event.schemas';
+import { User } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -37,7 +38,7 @@ export const resetPassword = async ({verificationCode, password}:ResetPasswordPa
   return API.post("/auth/password/reset", { verificationCode, password });  
 }
 
-export const getUser = async () => {
+export const getUser = async (): Promise<User> => {
   return API.get("/user");
 };
 
