@@ -1,13 +1,23 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 
-const FieldOptions = ({ field, onUpdate }) => {
-  const handleOptionClick = (option) => {
-    // Special handling for radio fields
-    if (field.type === 'radio') {
+// Define the types for our props
+interface FieldOptionsProps {
+  field: {
+    type: 'text' | 'list' | 'radio' | 'checkbox';
+    required: boolean;
+    readonly: boolean;
+  };
+  onUpdate: (settings: { required?: boolean; readonly?: boolean }) => void;
+}
+
+const FieldOptions: React.FC<FieldOptionsProps> = ({ field, onUpdate }) => {
+  const handleOptionClick = (option: 'required' | 'readonly' | 'optional') => {
+    // Special handling for radio and checkbox fields
+    if (field.type === 'radio' || field.type === 'checkbox') {
       onUpdate({
-        required: !field.required,
-        readonly: false // Always false for radio
+        required: option === 'required',
+        readonly: false // Always false for radio and checkbox
       });
       return;
     }
@@ -32,8 +42,8 @@ const FieldOptions = ({ field, onUpdate }) => {
 
   const isOptional = !field.required && !field.readonly;
 
-  // For radio fields, only show required toggle
-  if (field.type === 'radio') {
+  // For radio and checkbox fields, only show required toggle
+  if (field.type === 'radio' || field.type === 'checkbox') {
     return (
       <div className="space-y-3">
         <label className="block text-purple-200 text-sm font-medium">Field Type</label>
@@ -47,7 +57,7 @@ const FieldOptions = ({ field, onUpdate }) => {
                 ? "bg-purple-600 text-purple-50"
                 : "bg-purple-800/50 text-purple-200 hover:bg-purple-700/50"
             }`}
-            onClick={() => handleOptionClick('required')}
+            onClick={() => handleOptionClick(field.required ? 'optional' : 'required')}
           >
             {field.required ? 'Required' : 'Optional'}
           </Button>
