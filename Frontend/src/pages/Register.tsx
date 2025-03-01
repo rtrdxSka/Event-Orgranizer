@@ -21,7 +21,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock, Mail, AlertCircle, KeyRound } from "lucide-react";
 import anime from "animejs/lib/anime.es.js";
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/NavBar";
 import { useMutation } from "@tanstack/react-query";
 import { register } from "@/lib/api";
 import { useForm } from "react-hook-form";
@@ -35,6 +35,7 @@ type RegisterError = {
   message: string;
   status: number;
 };
+
 
 const Register = () => {
   const navigate = useNavigate();
@@ -61,7 +62,7 @@ const Register = () => {
     },
   });
 
-  const { mutate: registerMutation, isLoading } = useMutation({
+  const { mutate: registerMutation, isPending } = useMutation({
     mutationFn: register,
     onSuccess: () => {
       setErrorMessage("");
@@ -81,7 +82,13 @@ const Register = () => {
       setErrorMessage(""); // Clear any existing error messages
       registerMutation(data);
     } catch (error) {
-      setErrorMessage(error.message);
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        setErrorMessage((error as { message: string }).message);
+      } else {
+        setErrorMessage('An unknown error occurred');
+      }
     }
   };
 
@@ -275,9 +282,9 @@ const Register = () => {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-purple-400 to-blue-400 hover:from-purple-500 hover:to-blue-500 text-purple-950 font-semibold mt-2"
-                    disabled={isLoading}
+                    disabled={isPending}
                   >
-                    {isLoading ? "Creating Account..." : "Create Account"}
+                    {isPending ? "Creating Account..." : "Create Account"}
                   </Button>
                 </CardContent>
               </form>

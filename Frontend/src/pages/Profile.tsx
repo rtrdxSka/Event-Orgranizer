@@ -1,20 +1,22 @@
 import React from 'react';
+import { Session, User} from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Mail, Calendar, AlertTriangle } from 'lucide-react';
 import useAuth from '@/hooks/useAuth';
-import Navbar from '@/components/Navbar';
+import Navbar from '@/components/NavBar';
 import useSessions from '@/hooks/useSessions';
 import SessionCard from '@/components/SessionCard';
 
 const Profile = () => {
   const { user } = useAuth();
-  const { email, verified, createdAt } = user;
-  const {sessions, isPending, isSuccess, isError} = useSessions();
+ 
+  const { email, verified, createdAt } = user as User;
+  const {sessions = [], isPending, isError} = useSessions();
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -110,7 +112,7 @@ const Profile = () => {
             <div className="text-red-400">Failed to load sessions</div>
           ) : (
             <div className="grid gap-4">
-              {sessions?.map((session) => (
+              {(sessions as Session[]).map((session) => (
                 <SessionCard key={session._id} session={session} />
               ))}
             </div>
