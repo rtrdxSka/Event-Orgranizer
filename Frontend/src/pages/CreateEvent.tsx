@@ -528,13 +528,13 @@ const CreateEventForm = () => {
                     <DraggableField type={FIELD_TYPES.CHECKBOX} />
                   </div>
                 </div>
-
-                {/* Form Builder Area */}
-                <div className="col-span-7 bg-purple-900/40 rounded-xl p-8 border border-purple-700/50">
+  
+                {/* Form Builder Area - expanded to col-span-10 */}
+                <div className="col-span-10 bg-purple-900/40 rounded-xl p-8 border border-purple-700/50">
                   <h1 className="text-4xl font-bold text-purple-100 mb-8">
                     Create New Event
                   </h1>
-
+  
                   {/* Standard Form Fields */}
                   <div className="space-y-6 mb-8">
                     <div>
@@ -550,7 +550,7 @@ const CreateEventForm = () => {
                         required
                       />
                     </div>
-
+  
                     <div>
                       <label className="block text-purple-100 mb-2">
                         Description *
@@ -565,7 +565,7 @@ const CreateEventForm = () => {
                         required
                       />
                     </div>
-
+  
                     <div>
                       <label className="block text-purple-100 mb-2">Date</label>
                       <div className="relative group cursor-pointer">
@@ -583,7 +583,7 @@ const CreateEventForm = () => {
                         <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-purple-400 pointer-events-none group-hover:text-purple-200 transition-colors" />
                       </div>
                     </div>
-
+  
                     <div>
                       <label className="block text-purple-100 mb-2">
                         Place
@@ -600,7 +600,7 @@ const CreateEventForm = () => {
                       </div>
                     </div>
                   </div>
-
+  
                   {/* Custom Fields Drop Zone */}
                   <div className="mb-8">
                     <h2 className="text-xl font-semibold text-purple-100 mb-4">
@@ -608,8 +608,8 @@ const CreateEventForm = () => {
                     </h2>
                     <FormFieldDropZone onDrop={handleFieldDrop} />
                   </div>
-
-                  {/* Added Fields Display */}
+  
+                  {/* Added Fields Display with inline settings */}
                   {formFields.length > 0 && (
                     <div className="space-y-4 mb-8">
                       <h3 className="text-lg font-medium text-purple-100">
@@ -618,251 +618,339 @@ const CreateEventForm = () => {
                       {formFields.map((field) => (
                         <div
                           key={field.id}
-                          className="bg-purple-800/20 p-4 rounded-lg space-y-3"
+                          className="bg-purple-800/20 p-4 rounded-lg"
                         >
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={field.title}
-                              onChange={(e) =>
-                                updateFieldTitle(field.id, e.target.value)
-                              }
-                              className="bg-purple-800/50 border-purple-600 text-purple-100 font-medium"
-                              placeholder="Field title"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setSelectedFieldId(field.id)}
-                              className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
-                                selectedFieldId === field.id
-                                  ? "bg-purple-800"
-                                  : ""
-                              }`}
-                            >
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setFormFields(
-                                  formFields.filter((f) => f.id !== field.id)
-                                );
-                                if (selectedFieldId === field.id) {
-                                  setSelectedFieldId(null);
+                          <div className="flex flex-col">
+                            {/* Title and control buttons */}
+                            <div className="flex items-center gap-2 mb-3">
+                              <Input
+                                value={field.title}
+                                onChange={(e) =>
+                                  updateFieldTitle(field.id, e.target.value)
                                 }
-                              }}
-                              className="text-purple-100 hover:text-white hover:bg-purple-800"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-
-                          {/* Only show single value input for text fields */}
-                          {field.type === FIELD_TYPES.TEXT && (
-                            <Input
-                              value={field.value}
-                              onChange={(e) =>
-                                updateFieldValue(field.id, e.target.value)
-                              }
-                              className="bg-purple-800/50 border-purple-600 text-purple-100"
-                              placeholder={field.placeholder}
-                            />
-                          )}
-
-                          {/* Radio field rendering */}
-                          {field.type === FIELD_TYPES.RADIO && (() => {
-                            // Create a properly typed variable once for this section
-                            const radioField = field as RadioField;
-                            return (
-                              <div className="space-y-2 mt-2">
-                                {radioField.options.map((option) => (
-                                  <div key={option.id} className="flex items-center gap-2">
-                                    <input
-                                      type="radio"
-                                      checked={radioField.selectedOption === option.id}
-                                      onChange={() => 
-                                        updateFieldSettings(field.id, { selectedOption: option.id })
-                                      }
-                                      className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-                                    />
-                                    <Input
-                                      value={option.label}
-                                      onChange={(e) => {
-                                        const newOptions = radioField.options.map(opt =>
-                                          opt.id === option.id ? { ...opt, label: e.target.value } : opt
-                                        );
-                                        updateFieldSettings(field.id, { options: newOptions });
-                                      }}
-                                      className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                      placeholder="Option label"
-                                    />
-                                    {(radioField.options.length > 2) && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          const newOptions = radioField.options.filter(opt => opt.id !== option.id);
-                                          updateFieldSettings(field.id, { options: newOptions });
-                                        }}
-                                        className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newOptions = [
-                                      ...radioField.options,
-                                      { id: Date.now(), label: "" }
-                                    ];
-                                    updateFieldSettings(field.id, { options: newOptions });
-                                  }}
-                                  className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Add Option
-                                </Button>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Checkbox field rendering */}
-                          {field.type === FIELD_TYPES.CHECKBOX && (() => {
-                            // Create a properly typed variable once for this section
-                            const checkboxField = field as CheckboxField;
-                            return (
-                              <div className="space-y-2 mt-2">
-                                {checkboxField.options.map((option) => (
-                                  <div key={option.id} className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={option.checked}
-                                      onChange={() => {
-                                        const newOptions = checkboxField.options.map(opt =>
-                                          opt.id === option.id ? { ...opt, checked: !opt.checked } : opt
-                                        );
-                                        updateFieldSettings(field.id, { options: newOptions });
-                                      }}
-                                      className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-                                    />
-                                    <Input
-                                      value={option.label}
-                                      onChange={(e) => {
-                                        const newOptions = checkboxField.options.map(opt =>
-                                          opt.id === option.id ? { ...opt, label: e.target.value } : opt
-                                        );
-                                        updateFieldSettings(field.id, { options: newOptions });
-                                      }}
-                                      className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                      placeholder="Option label"
-                                    />
-                                    {(checkboxField.options.length > 1) && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          const newOptions = checkboxField.options.filter(opt => opt.id !== option.id);
-                                          updateFieldSettings(field.id, { options: newOptions });
-                                        }}
-                                        className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newOptions = [
-                                      ...checkboxField.options,
-                                      { id: Date.now(), label: "", checked: false }
-                                    ];
-                                    updateFieldSettings(field.id, { options: newOptions });
-                                  }}
-                                  className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Add Option
-                                </Button>
-                              </div>
-                            );
-                          })()}
-
-                          {/* List field rendering */}
-                          {field.type === FIELD_TYPES.LIST && (
-                            <div className="space-y-2 mt-2">
-                              {(field as ListField).values.map((value, index) => (
-                                <div key={index} className="flex gap-2">
+                                className="bg-purple-800/50 border-purple-600 text-purple-100 font-medium"
+                                placeholder="Field title"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
+                                className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
+                                  selectedFieldId === field.id
+                                    ? "bg-purple-800"
+                                    : ""
+                                }`}
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setFormFields(
+                                    formFields.filter((f) => f.id !== field.id)
+                                  );
+                                  if (selectedFieldId === field.id) {
+                                    setSelectedFieldId(null);
+                                  }
+                                }}
+                                className="text-purple-100 hover:text-white hover:bg-purple-800"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+  
+                            {/* Field content and inline settings */}
+                            <div className="flex gap-4">
+                              {/* Field content area */}
+                              <div className="flex-1 space-y-3">
+                                {/* Only show single value input for text fields */}
+                                {field.type === FIELD_TYPES.TEXT && (
                                   <Input
-                                    value={value}
-                                    onChange={(e) => {
-                                      const newValues = [...(field as ListField).values];
-                                      newValues[index] = e.target.value;
-                                      updateFieldSettings(field.id, {
-                                        values: newValues,
-                                      });
-                                    }}
+                                    value={field.value}
+                                    onChange={(e) =>
+                                      updateFieldValue(field.id, e.target.value)
+                                    }
                                     className="bg-purple-800/50 border-purple-600 text-purple-100"
                                     placeholder={field.placeholder}
                                   />
-                                  {(field as ListField).values.length > 1 && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        const newValues = (field as ListField).values.filter(
-                                          (_, i) => i !== index
-                                        );
-                                        updateFieldSettings(field.id, {
-                                          values: newValues,
-                                        });
-                                      }}
-                                      className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  )}
+                                )}
+  
+                                {/* Radio field rendering */}
+                                {field.type === FIELD_TYPES.RADIO && (() => {
+                                  // Create a properly typed variable once for this section
+                                  const radioField = field as RadioField;
+                                  return (
+                                    <div className="space-y-2 mt-2">
+                                      {radioField.options.map((option) => (
+                                        <div key={option.id} className="flex items-center gap-2">
+                                          <input
+                                            type="radio"
+                                            checked={radioField.selectedOption === option.id}
+                                            onChange={() => 
+                                              updateFieldSettings(field.id, { selectedOption: option.id })
+                                            }
+                                            className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                                          />
+                                          <Input
+                                            value={option.label}
+                                            onChange={(e) => {
+                                              const newOptions = radioField.options.map(opt =>
+                                                opt.id === option.id ? { ...opt, label: e.target.value } : opt
+                                              );
+                                              updateFieldSettings(field.id, { options: newOptions });
+                                            }}
+                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                            placeholder="Option label"
+                                          />
+                                          {(radioField.options.length > 2) && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => {
+                                                const newOptions = radioField.options.filter(opt => opt.id !== option.id);
+                                                updateFieldSettings(field.id, { options: newOptions });
+                                              }}
+                                              className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const newOptions = [
+                                            ...radioField.options,
+                                            { id: Date.now(), label: "" }
+                                          ];
+                                          updateFieldSettings(field.id, { options: newOptions });
+                                        }}
+                                        className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                      >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Option
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
+  
+                                {/* Checkbox field rendering */}
+                                {field.type === FIELD_TYPES.CHECKBOX && (() => {
+                                  // Create a properly typed variable once for this section
+                                  const checkboxField = field as CheckboxField;
+                                  return (
+                                    <div className="space-y-2 mt-2">
+                                      {checkboxField.options.map((option) => (
+                                        <div key={option.id} className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={option.checked}
+                                            onChange={() => {
+                                              const newOptions = checkboxField.options.map(opt =>
+                                                opt.id === option.id ? { ...opt, checked: !opt.checked } : opt
+                                              );
+                                              updateFieldSettings(field.id, { options: newOptions });
+                                            }}
+                                            className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                                          />
+                                          <Input
+                                            value={option.label}
+                                            onChange={(e) => {
+                                              const newOptions = checkboxField.options.map(opt =>
+                                                opt.id === option.id ? { ...opt, label: e.target.value } : opt
+                                              );
+                                              updateFieldSettings(field.id, { options: newOptions });
+                                            }}
+                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                            placeholder="Option label"
+                                          />
+                                          {(checkboxField.options.length > 1) && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => {
+                                                const newOptions = checkboxField.options.filter(opt => opt.id !== option.id);
+                                                updateFieldSettings(field.id, { options: newOptions });
+                                              }}
+                                              className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const newOptions = [
+                                            ...checkboxField.options,
+                                            { id: Date.now(), label: "", checked: false }
+                                          ];
+                                          updateFieldSettings(field.id, { options: newOptions });
+                                        }}
+                                        className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                      >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Option
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
+  
+                                {/* List field rendering */}
+                                {field.type === FIELD_TYPES.LIST && (
+                                  <div className="space-y-2 mt-2">
+                                    {(field as ListField).values.map((value, index) => (
+                                      <div key={index} className="flex gap-2">
+                                        <Input
+                                          value={value}
+                                          onChange={(e) => {
+                                            const newValues = [...(field as ListField).values];
+                                            newValues[index] = e.target.value;
+                                            updateFieldSettings(field.id, {
+                                              values: newValues,
+                                            });
+                                          }}
+                                          className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                          placeholder={field.placeholder}
+                                        />
+                                        {(field as ListField).values.length > 1 && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                              const newValues = (field as ListField).values.filter(
+                                                (_, i) => i !== index
+                                              );
+                                              updateFieldSettings(field.id, {
+                                                values: newValues,
+                                              });
+                                            }}
+                                            className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {(!(field as ListField).maxEntries ||
+                                      (field as ListField).values.length < (field as ListField).maxEntries) && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const newValues = [...(field as ListField).values, ""];
+                                          updateFieldSettings(field.id, {
+                                            values: newValues,
+                                          });
+                                        }}
+                                        className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                      >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Entry
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+  
+                              {/* Inline settings panel */}
+                              {selectedFieldId === field.id && (
+                                <div className="w-72 bg-purple-900/60 rounded-lg p-4 border border-purple-700/50">
+                                  <h4 className="text-lg font-medium text-purple-100 mb-3">Field Settings</h4>
+                                  
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-purple-100 mb-2">
+                                        Placeholder Text
+                                      </label>
+                                      <Input
+                                        value={field.placeholder}
+                                        onChange={(e) =>
+                                          updateFieldSettings(field.id, {
+                                            placeholder: e.target.value,
+                                          })
+                                        }
+                                        className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                        placeholder="Enter placeholder text"
+                                      />
+                                    </div>
+  
+                                    {/* List-specific settings */}
+                                    {field.type === FIELD_TYPES.LIST && (
+                                      <>
+                                        <div>
+                                          <label className="block text-purple-100 mb-2">
+                                            Maximum Entries
+                                          </label>
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            value={(field as ListField).maxEntries}
+                                            onChange={(e) =>
+                                              updateFieldSettings(field.id, {
+                                                maxEntries: parseInt(e.target.value) || 0,
+                                              })
+                                            }
+                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                            placeholder="0 for unlimited"
+                                          />
+                                          <p className="text-purple-400 text-sm mt-1">
+                                            Set to 0 for unlimited entries.
+                                          </p>
+                                        </div>
+  
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <input
+                                              type="checkbox"
+                                              id={`allowUserAdd-${field.id}`}
+                                              checked={(field as ListField).allowUserAdd}
+                                              onChange={(e) =>
+                                                updateFieldSettings(field.id, {
+                                                  allowUserAdd: e.target.checked,
+                                                })
+                                              }
+                                              className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
+                                            />
+                                            <label
+                                              htmlFor={`allowUserAdd-${field.id}`}
+                                              className="text-purple-200"
+                                            >
+                                              Allow users to add entries
+                                            </label>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+  
+                                    {/* Field options component */}
+                                    <FieldOptions 
+                                      field={field} 
+                                      onUpdate={(updates) => updateFieldSettings(field.id, updates)} 
+                                    />
+                                  </div>
                                 </div>
-                              ))}
-                              {(!(field as ListField).maxEntries ||
-                                (field as ListField).values.length < (field as ListField).maxEntries) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newValues = [...(field as ListField).values, ""];
-                                    updateFieldSettings(field.id, {
-                                      values: newValues,
-                                    });
-                                  }}
-                                  className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Add Entry
-                                </Button>
                               )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
-
+  
                   {/* Submit Button */}
                   <div className="flex justify-end">
                     <Button
@@ -872,109 +960,6 @@ const CreateEventForm = () => {
                       Create Event
                     </Button>
                   </div>
-                </div>
-
-                {/* Field Editor Sidebar */}
-                <div className="col-span-3">
-                  {selectedField ? (
-                    <div className="bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
-                      <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-semibold text-purple-100">
-                          Edit Field
-                        </h2>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setSelectedFieldId(null)}
-                          className="text-purple-100 hover:text-white hover:bg-purple-800"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block text-purple-100 mb-2">
-                            Placeholder Text
-                          </label>
-                          <Input
-                            value={selectedField.placeholder}
-                            onChange={(e) =>
-                              updateFieldSettings(selectedField.id, {
-                                placeholder: e.target.value,
-                              })
-                            }
-                            className="bg-purple-800/50 border-purple-600 text-purple-100"
-                            placeholder="Enter placeholder text"
-                          />
-                        </div>
-
-                        {/* List-specific settings */}
-                        {selectedField.type === FIELD_TYPES.LIST && (
-                          <>
-                            <div>
-                              <label className="block text-purple-100 mb-2">
-                                Maximum Entries
-                              </label>
-                              <Input
-                                type="number"
-                                min="0"
-                                value={(selectedField as ListField).maxEntries}
-                                onChange={(e) =>
-                                  updateFieldSettings(selectedField.id, {
-                                    maxEntries: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                placeholder="0 for unlimited"
-                              />
-                              <p className="text-purple-400 text-sm mt-1">
-                                Set to 0 for unlimited entries. This limit
-                                applies to both creation and submission.
-                              </p>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  id="allowUserAdd"
-                                  checked={(selectedField as ListField).allowUserAdd}
-                                  onChange={(e) =>
-                                    updateFieldSettings(selectedField.id, {
-                                      allowUserAdd: e.target.checked,
-                                    })
-                                  }
-                                  className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
-                                />
-                                <label
-                                  htmlFor="allowUserAdd"
-                                  className="text-purple-200"
-                                >
-                                  Allow users to add entries
-                                </label>
-                              </div>
-                              <p className="text-purple-400 text-sm mt-1">
-                                This setting only applies when users fill out
-                                the form, not during creation.
-                              </p>
-                            </div>
-                          </>
-                        )}
-                          <FieldOptions 
-  field={selectedField} 
-  onUpdate={(updates: FieldSettings) => updateFieldSettings(selectedField.id, updates)} 
-/>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
-                      <p className="text-purple-300 text-center">
-                        Select a field to edit its properties
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
             </form>
