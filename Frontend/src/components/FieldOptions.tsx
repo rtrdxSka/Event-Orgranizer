@@ -1,14 +1,52 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 
-// Define the types for our props
+// Define the types for our props to match the existing implementation
+interface BaseField {
+  id: number;
+  type: 'text' | 'list' | 'radio' | 'checkbox';
+  title: string;
+  placeholder: string;
+  value: string;
+  required: boolean;
+  readonly: boolean;
+}
+
+interface TextField extends BaseField {
+  type: 'text';
+}
+
+interface RadioField extends BaseField {
+  type: 'radio';
+  options: Array<{
+    id: number;
+    label: string;
+  }>;
+  selectedOption: number | null;
+}
+
+interface CheckboxField extends BaseField {
+  type: 'checkbox';
+  options: Array<{
+    id: number;
+    label: string;
+    checked: boolean;
+  }>;
+}
+
+interface ListField extends BaseField {
+  type: 'list';
+  values: string[];
+  maxEntries: number;
+  allowUserAdd: boolean;
+}
+
+type Field = TextField | ListField | RadioField | CheckboxField;
+type FieldSettings = Partial<Omit<Field, 'id' | 'type'>>;
+
 interface FieldOptionsProps {
-  field: {
-    type: 'text' | 'list' | 'radio' | 'checkbox';
-    required: boolean;
-    readonly: boolean;
-  };
-  onUpdate: (settings: { required?: boolean; readonly?: boolean }) => void;
+  field: Field;
+  onUpdate: (settings: FieldSettings) => void;
 }
 
 const FieldOptions: React.FC<FieldOptionsProps> = ({ field, onUpdate }) => {

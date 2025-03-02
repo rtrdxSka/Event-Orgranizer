@@ -15,6 +15,7 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 import { DndProvider } from "react-dnd";
 import Navbar from "@/components/NavBar";
 import FieldOptions from "@/components/FieldOptions";
+import MultiDateField from "@/components/MultiDateField";
 
 type FieldType = 'text' | 'list' | 'radio' | 'checkbox';
 
@@ -75,7 +76,8 @@ type FieldSettings = TextFieldSettings | ListFieldSettings | RadioFieldSettings 
 interface EventFormData {
   name: string;
   description: string;
-  eventDate: string;
+  eventDate: string[];
+  maxDates: number;
   place: string;
 }
 
@@ -148,7 +150,8 @@ const CreateEventForm = () => {
   const [formData, setFormData] = useState<EventFormData>({
     name: "",
     description: "",
-    eventDate: "",
+    eventDates:[""],
+    maxDates: 0,
     place: "",
   });
 
@@ -157,6 +160,25 @@ const CreateEventForm = () => {
     setFormData((prev: EventFormData) => ({
       ...prev,
       [name]: value,
+    }));
+  };
+
+  const handleDateChange = (eventDates: string[]): void => {
+    setFormData((prev: EventFormData) => ({
+      ...prev,
+      eventDates,
+    }));
+  };
+
+  const handleMaxDatesChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const maxDates = parseInt(e.target.value) || 0;
+    setFormData((prev: EventFormData) => ({
+      ...prev,
+      maxDates,
+      // If reducing max dates, trim the array
+      eventDates: maxDates > 0 && prev.eventDates.length > maxDates 
+        ? prev.eventDates.slice(0, maxDates) 
+        : prev.eventDates
     }));
   };
 
@@ -369,9 +391,15 @@ const CreateEventForm = () => {
             if (!checkboxField.options.some(opt => opt.checked)) {
               throw new Error(`${field.title}: Read-only checkbox fields must have at least one checked option`);
             }
+
+            
           }
         }
       });
+
+      if (formData.eventDates.filter(date => date.trim() !== '').length === 0) {
+        throw new Error("At least one event date must be provided");
+      }
 
       interface CustomFieldData {
         type: FieldType;
@@ -435,34 +463,44 @@ const CreateEventForm = () => {
         acc[field.title] = fieldData;
         return acc;
       }, {});
+
+      const validDates = formData.eventDates.filter(date => date.trim() !== '');
+
+      const dateOptions = validDates.map(date => ({
+        optionName: new Date(date).toISOString(),
+        votes: []
+      }));
+
   
-      const eventData = {
-        name: formData.name,
-        description: formData.description,
-        eventDate: formData.eventDate
-          ? new Date(formData.eventDate).toISOString()
-          : null,
-        place: formData.place || null,
-        customFields: customFieldsObject,
-        votingCategories: [
-          {
-            categoryName: "date",
-            options: formData.eventDate
-              ? [{ optionName: new Date(formData.eventDate).toISOString(), votes: [] }]
-              : [],
-          },
-          {
-            categoryName: "time",
-            options: [],
-          },
-          {
-            categoryName: "place",
-            options: formData.place
-              ? [{ optionName: formData.place, votes: [] }]
-              : [],
-          },
-        ],
-      };
+      // Replace this section in the handleSubmit function where eventData is being created:
+
+const eventData = {
+  name: formData.name,
+  description: formData.description,
+  place: formData.place || null,
+  customFields: {
+    ...customFieldsObject
+  },
+  // Instead of adding to customFields, add these as direct properties
+  eventDates: validDates.map(date => new Date(date).toISOString()),
+  maxDates: formData.maxDates,
+  votingCategories: [
+    {
+      categoryName: "date",
+      options: dateOptions
+    },
+    {
+      categoryName: "time",
+      options: [],
+    },
+    {
+      categoryName: "place",
+      options: formData.place
+        ? [{ optionName: formData.place, votes: [] }]
+        : [],
+    },
+  ],
+};
       
       // Add radio fields as voting categories
       formFields.forEach(field => {
@@ -565,23 +603,33 @@ const CreateEventForm = () => {
                         required
                       />
                     </div>
+
   
-                    <div>
-                      <label className="block text-purple-100 mb-2">Date</label>
-                      <div className="relative group cursor-pointer">
-                        <Input
-                          type="datetime-local"
-                          name="eventDate"
-                          value={formData.eventDate}
-                          onChange={handleInputChange}
-                          className="bg-purple-800/50 border-purple-600 text-purple-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                          onClick={(e) => {
-                            const input = e.currentTarget;
-                            input.showPicker();
-                          }}
-                        />
-                        <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-purple-400 pointer-events-none group-hover:text-purple-200 transition-colors" />
+ <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-purple-100">Event Dates *</label>
+                        <div className="flex items-center gap-2">
+                          <label className="text-purple-100 text-sm">Max Dates:</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={formData.maxDates}
+                            onChange={handleMaxDatesChange}
+                            className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
+                            placeholder="0 for unlimited"
+                          />
+                        </div>
                       </div>
+                      <MultiDateField 
+                        dates={formData.eventDates} 
+                        maxDates={formData.maxDates} 
+                        onChange={handleDateChange} 
+                      />
+                      <p className="text-purple-400 text-sm mt-1">
+                        {formData.maxDates === 0 
+                          ? "Users can suggest unlimited dates" 
+                          : `Users can suggest up to ${formData.maxDates} dates`}
+                      </p>
                     </div>
   
                     <div>
