@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Calendar,
   MapPin,
   Plus,
   X,
@@ -16,6 +15,7 @@ import { DndProvider } from "react-dnd";
 import Navbar from "@/components/NavBar";
 import FieldOptions from "@/components/FieldOptions";
 import MultiDateField from "@/components/MultiDateField";
+import { eventFormSchema, validateForm } from "@/lib/validations/event.schemas";
 
 type FieldType = 'text' | 'list' | 'radio' | 'checkbox';
 
@@ -72,14 +72,6 @@ type ListFieldSettings = Partial<Omit<ListField, 'id' | 'type'>>;
 type RadioFieldSettings = Partial<Omit<RadioField, 'id' | 'type'>>;
 type CheckboxFieldSettings = Partial<Omit<CheckboxField, 'id' | 'type'>>;
 type FieldSettings = TextFieldSettings | ListFieldSettings | RadioFieldSettings | CheckboxFieldSettings;
-
-interface EventFormData {
-  name: string;
-  description: string;
-  eventDate: string[];
-  maxDates: number;
-  place: string;
-}
 
 interface DragItem {
   type: FieldType;
@@ -146,14 +138,28 @@ const FormFieldDropZone = ({ onDrop }: FormFieldDropZoneProps) => {
   );
 };
 
+interface EventFormData {
+  name: string;
+  description: string;
+  eventDates: {
+    dates: string[]; 
+    maxDates: number;
+  };
+  place: string;
+}
+
+const initialFormData: EventFormData = {
+  name: "",
+  description: "",
+  eventDates: {
+    dates: [""], 
+    maxDates: 0
+  },
+  place: "",
+};
+
 const CreateEventForm = () => {
-  const [formData, setFormData] = useState<EventFormData>({
-    name: "",
-    description: "",
-    eventDates:[""],
-    maxDates: 0,
-    place: "",
-  });
+  const [formData, setFormData] = useState<EventFormData>(initialFormData);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     const { name, value } = e.target;
@@ -163,23 +169,43 @@ const CreateEventForm = () => {
     }));
   };
 
-  const handleDateChange = (eventDates: string[]): void => {
-    setFormData((prev: EventFormData) => ({
-      ...prev,
-      eventDates,
-    }));
+  const handleDateChange = (dates: string[]): void => {
+    setFormData((prev) => {
+      // Create a completely new object to avoid type issues
+      return {
+        name: prev.name,
+        description: prev.description,
+        place: prev.place,
+        eventDates: {
+          maxDates: prev.eventDates.maxDates,
+          dates: dates // Use the dates parameter directly
+        }
+      };
+    });
   };
-
+  
   const handleMaxDatesChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const maxDates = parseInt(e.target.value) || 0;
-    setFormData((prev: EventFormData) => ({
-      ...prev,
-      maxDates,
-      // If reducing max dates, trim the array
-      eventDates: maxDates > 0 && prev.eventDates.length > maxDates 
-        ? prev.eventDates.slice(0, maxDates) 
-        : prev.eventDates
-    }));
+    setFormData((prev) => {
+      // Get the current dates
+      const currentDates = [...prev.eventDates.dates];
+      
+      // Apply the trim logic
+      const newDates = maxDates > 0 && currentDates.length > maxDates
+        ? currentDates.slice(0, maxDates)
+        : currentDates;
+      
+      // Return a fully typed new state object
+      return {
+        name: prev.name,
+        description: prev.description,
+        place: prev.place,
+        eventDates: {
+          maxDates: maxDates,
+          dates: newDates
+        }
+      };
+    });
   };
 
   const [formFields, setFormFields] = useState<Field[]>([]);
@@ -270,282 +296,147 @@ const CreateEventForm = () => {
     (field) => field.id === selectedFieldId
   );
 
-  const handleSubmit = (e: React.FormEvent): void => {
-    e.preventDefault();
-  
-    try {
-      // Validate fields before submission
-      formFields.forEach(field => {
-        // Check if field has a title
-        if (!field.title.trim()) {
-          throw new Error("All fields must have a title");
-        }
+// Replace your current handleSubmit function with this version
+// Updated handleSubmit function to work with the new schema structure
+const handleSubmit = (e: React.FormEvent): void => {
+  e.preventDefault();
 
-        const isOptional = !field.required && !field.readonly;
-        
-        if (field.type === FIELD_TYPES.TEXT) {
-          if (field.readonly) {
-            // For readonly text fields: must have a value
-            if (!field.value.trim()) {
-              throw new Error(`${field.title}: Read-only text fields must have a value`);
-            }
-          } else if ((field.required || isOptional) && field.value.trim() !== '') {
-            // For required/optional text fields: must be empty
-            throw new Error(
-              `${field.title}: ${field.required ? 'Required' : 'Optional'} text fields must be empty for form creation`
-            );
-          }
-        } else if (field.type === FIELD_TYPES.LIST) {
-          const listField = field as ListField;
-          const nonEmptyValues = listField.values.filter(v => v.trim() !== '');
-          
-          if (field.readonly) {
-            // For readonly list fields: all entries must have values
-            if (listField.maxEntries > 0) {
-              // If max entries is set
-              if (listField.values.length < listField.maxEntries) {
-                throw new Error(
-                  `${field.title}: Read-only list must have exactly ${listField.maxEntries} entries. Currently has ${listField.values.length}`
-                );
-              }
-              if (nonEmptyValues.length !== listField.maxEntries) {
-                throw new Error(
-                  `${field.title}: All ${listField.maxEntries} entries in read-only list must have values`
-                );
-              }
-            } else {
-              // If unlimited entries
-              if (listField.values.some(v => !v.trim())) {
-                throw new Error(
-                  `${field.title}: All entries in read-only list must have values`
-                );
-              }
-            }
-          } else if (field.required || !field.required) { // Handle both required and optional cases
-            const hasEmptyField = listField.values.some(v => v.trim() === '');
-            const hasRoomForMore = listField.maxEntries === 0 || listField.values.length < listField.maxEntries;
-            
-            // Check if users can add entries
-            if (!listField.allowUserAdd) {
-              // If users can't add entries, we must provide an empty field
-              if (!hasEmptyField) {
-                throw new Error(
-                  `${field.title}: Must include an empty field for user input since users cannot add their own entries`
-                );
-              }
-            } else {
-              // If users can add entries, either need an empty field or room for more
-              if (!hasEmptyField && !hasRoomForMore) {
-                throw new Error(
-                  `${field.title}: Must either have an empty field or room for more entries`
-                );
-              }
-            }
-
-            // Additional validation for max entries
-            if (listField.maxEntries > 0 && listField.values.length > listField.maxEntries) {
-              throw new Error(
-                `${field.title}: Number of fields (${listField.values.length}) exceeds maximum allowed (${listField.maxEntries})`
-              );
-            }
-          }
-        } else if (field.type === FIELD_TYPES.RADIO) {
-          const radioField = field as RadioField;
-          // Check if all options have labels
-          if (radioField.options.some(opt => !opt.label.trim())) {
-            throw new Error(`${field.title}: All radio options must have labels`);
-          }
-
-          // Need at least 2 options
-          if (radioField.options.length < 2) {
-            throw new Error(`${field.title}: Radio fields must have at least 2 options`);
-          }
-
-          if (field.readonly) {
-            // For readonly fields, must have a selected option
-            if (!radioField.selectedOption) {
-              throw new Error(`${field.title}: Read-only radio fields must have a selected option`);
-            }
-          } else {
-            // For required/optional fields, should not have a selection during creation
-            if (radioField.selectedOption) {
-              throw new Error(
-                `${field.title}: ${field.required ? 'Required' : 'Optional'} radio fields should not have a selection during creation`
-              );
-            }
-          }
-        } else if (field.type === FIELD_TYPES.CHECKBOX) {
-          const checkboxField = field as CheckboxField;
-          // Check if all options have labels
-          if (checkboxField.options.some(opt => !opt.label.trim())) {
-            throw new Error(`${field.title}: All checkbox options must have labels`);
-          }
-
-          // Need at least 1 option
-          if (checkboxField.options.length < 1) {
-            throw new Error(`${field.title}: Checkbox fields must have at least 1 option`);
-          }
-
-          if (field.readonly) {
-            // For readonly fields, at least one option should be checked
-            if (!checkboxField.options.some(opt => opt.checked)) {
-              throw new Error(`${field.title}: Read-only checkbox fields must have at least one checked option`);
-            }
-
-            
-          }
-        }
-      });
-
-      if (formData.eventDates.filter(date => date.trim() !== '').length === 0) {
-        throw new Error("At least one event date must be provided");
-      }
-
-      interface CustomFieldData {
-        type: FieldType;
-        placeholder: string;
-        required: boolean;
-        readonly: boolean;
-        optional: boolean;
-        title: string;
-        value?: string;
-        values?: string[];
-        maxEntries?: number;
-        allowUserAdd?: boolean;
-        options?: Array<{ id: number; label: string }> | Array<{ id: number; label: string; checked: boolean }>;
-        selectedOption?: number | null;
-      }
+  try {
+    // Use Zod for validation with the new structure
+    const validationData = {
+      name: formData.name,
+      description: formData.description,
+      // Pass the whole eventDates object now
+      eventDates: {
+        dates: formData.eventDates.dates,
+        maxDates: formData.eventDates.maxDates,
+      },
+      place: formData.place,
+      formFields: formFields
+    };
     
-      // Transform custom fields into the required format
-      const customFieldsObject = formFields.reduce((acc: Record<string, CustomFieldData>, field) => {
-        const isOptional = !field.required && !field.readonly;
-        
-        const fieldData:CustomFieldData  = {
-          type: field.type,
-          placeholder: field.placeholder,
-          required: field.required,
-          readonly: field.readonly,
-          optional: isOptional,
-          title: field.title,
-        };
-
-        if (field.type === FIELD_TYPES.RADIO) {
-          const radioField = field as RadioField;
-          fieldData.options = radioField.options.map(opt => ({
-            id: opt.id,
-            label: opt.label
-          }));
-          fieldData.selectedOption = radioField.selectedOption;
-        }
-
-        if (field.type === FIELD_TYPES.CHECKBOX) {
-          const checkboxField = field as CheckboxField;
-          fieldData.options = checkboxField.options.map(opt => ({
-            id: opt.id,
-            label: opt.label,
-            checked: opt.checked
-          }));
-        }
-
-        if (field.type === FIELD_TYPES.LIST) {
-          const listField = field as ListField;
-          fieldData.maxEntries = listField.maxEntries;
-          fieldData.allowUserAdd = listField.allowUserAdd;
-          // Only include non-empty values for readonly fields
-          fieldData.values = field.readonly 
-            ? listField.values.filter(v => v.trim() !== '')
-            : listField.values;
-        } else {
-          // Only include value for readonly fields
-          fieldData.value = field.readonly ? field.value : '';
-        }
-  
-        acc[field.title] = fieldData;
-        return acc;
-      }, {});
-
-      const validDates = formData.eventDates.filter(date => date.trim() !== '');
-
-      const dateOptions = validDates.map(date => ({
-        optionName: new Date(date).toISOString(),
-        votes: []
-      }));
-
-  
-      // Replace this section in the handleSubmit function where eventData is being created:
-
-const eventData = {
-  name: formData.name,
-  description: formData.description,
-  place: formData.place || null,
-  customFields: {
-    ...customFieldsObject
-  },
-  // Instead of adding to customFields, add these as direct properties
-  eventDates: validDates.map(date => new Date(date).toISOString()),
-  maxDates: formData.maxDates,
-  votingCategories: [
-    {
-      categoryName: "date",
-      options: dateOptions
-    },
-    {
-      categoryName: "time",
-      options: [],
-    },
-    {
-      categoryName: "place",
-      options: formData.place
-        ? [{ optionName: formData.place, votes: [] }]
-        : [],
-    },
-  ],
-};
-      
-      // Add radio fields as voting categories
-      formFields.forEach(field => {
-        if (field.type === FIELD_TYPES.RADIO) {
-          const radioField = field as RadioField;
-          eventData.votingCategories.push({
-            categoryName: field.title,
-            options: radioField.options.map(opt => ({
-              optionName: opt.label,
-              votes: []
-            }))
-          });
-        }
-        
-        // Add checkbox fields as voting categories
-        if (field.type === FIELD_TYPES.CHECKBOX) {
-          const checkboxField = field as CheckboxField;
-          eventData.votingCategories.push({
-            categoryName: field.title,
-            options: checkboxField.options.map(opt => ({
-              optionName: opt.label,
-              votes: []
-            }))
-          });
-        }
-      });
-  
-      console.log("Form Fields:", formFields);
-      console.log("Custom Fields Object:", customFieldsObject);
-      console.log("Event Data:", eventData);
-      
-      // Here you would submit the data
-      // await submitEvent(eventData);
-      
-    } catch (error) {
-      // Create a properly typed error object
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'An unknown error occurred';
-        
-      console.error("Form submission error:", errorMessage);
-      // You should show this error to the user in your UI
-      alert(errorMessage); // Replace with proper error handling UI
+    // First validate the structure with Zod
+    const validationResult = eventFormSchema.safeParse(validationData);
+    
+    if (!validationResult.success) {
+      // Extract the first error message
+      const firstError = validationResult.error.errors[0];
+      throw new Error(firstError.message);
     }
-  };
+    
+    // Then use the custom validator for field-specific validation
+    const customValidationResult = validateForm(validationResult.data);
+    if (customValidationResult !== true) {
+      throw new Error(customValidationResult);
+    }
+    
+    // If validation passes, continue with the existing logic
+    // Filter valid dates from the structure
+    const validDates = formData.eventDates.dates.filter(date => date.trim() !== '');
+
+    const dateOptions = validDates.map(date => ({
+      optionName: new Date(date).toISOString(),
+      votes: []
+    }));
+
+    // Transform custom fields into the required format
+    const customFieldsObject = formFields.reduce((acc: Record<string, any>, field) => {
+      const isOptional = !field.required && !field.readonly;
+      
+      const fieldData = {
+        type: field.type,
+        placeholder: field.placeholder,
+        required: field.required,
+        readonly: field.readonly,
+        optional: isOptional,
+        title: field.title,
+      };
+
+      if (field.type === FIELD_TYPES.RADIO) {
+        const radioField = field as RadioField;
+        fieldData.options = radioField.options.map(opt => ({
+          id: opt.id,
+          label: opt.label
+        }));
+        fieldData.selectedOption = radioField.selectedOption;
+      }
+
+      if (field.type === FIELD_TYPES.CHECKBOX) {
+        const checkboxField = field as CheckboxField;
+        fieldData.options = checkboxField.options.map(opt => ({
+          id: opt.id,
+          label: opt.label,
+          checked: opt.checked
+        }));
+      }
+
+      if (field.type === FIELD_TYPES.LIST) {
+        const listField = field as ListField;
+        fieldData.maxEntries = listField.maxEntries;
+        fieldData.allowUserAdd = listField.allowUserAdd;
+        // Only include non-empty values for readonly fields
+        fieldData.values = field.readonly 
+          ? listField.values.filter(v => v.trim() !== '')
+          : listField.values;
+      } else {
+        // Only include value for readonly fields
+        fieldData.value = field.readonly ? field.value : '';
+      }
+
+      acc[field.title] = fieldData;
+      return acc;
+    }, {});
+    
+    // Create the event data with the updated structure
+    const eventData = {
+      name: formData.name,
+      description: formData.description,
+      place: formData.place || null,
+      customFields: {
+        ...customFieldsObject
+      },
+      // Use the consolidated eventDates structure
+      eventDates: {
+        dates: validDates.map(date => new Date(date).toISOString()),
+        maxDates: formData.eventDates.maxDates
+      },
+      votingCategories: [
+        {
+          categoryName: "date",
+          options: dateOptions
+        },
+        {
+          categoryName: "time",
+          options: [],
+        },
+        {
+          categoryName: "place",
+          options: formData.place
+            ? [{ optionName: formData.place, votes: [] }]
+            : [],
+        },
+      ],
+    };
+    
+    // The rest of your submit handler remains the same
+    console.log("Form Fields:", formFields);
+    console.log("Custom Fields Object:", customFieldsObject);
+    console.log("Event Data:", eventData);
+    
+    // Here you would submit the data
+    // await submitEvent(eventData);
+    
+  } catch (error) {
+    // Create a properly typed error object
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'An unknown error occurred';
+      
+    console.error("Form submission error:", errorMessage);
+    // You should show this error to the user in your UI
+    alert(errorMessage); // Replace with proper error handling UI
+  }
+};
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="min-h-screen bg-purple-950">
@@ -613,7 +504,7 @@ const eventData = {
                           <Input
                             type="number"
                             min="0"
-                            value={formData.maxDates}
+                            value={formData.eventDates.maxDates}
                             onChange={handleMaxDatesChange}
                             className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
                             placeholder="0 for unlimited"
@@ -621,14 +512,14 @@ const eventData = {
                         </div>
                       </div>
                       <MultiDateField 
-                        dates={formData.eventDates} 
-                        maxDates={formData.maxDates} 
+                        dates={formData.eventDates.dates} 
+                        maxDates={formData.eventDates.maxDates} 
                         onChange={handleDateChange} 
                       />
                       <p className="text-purple-400 text-sm mt-1">
-                        {formData.maxDates === 0 
+                        {formData.eventDates.maxDates === 0 
                           ? "Users can suggest unlimited dates" 
-                          : `Users can suggest up to ${formData.maxDates} dates`}
+                          : `Users can suggest up to ${formData.eventDates.maxDates} dates`}
                       </p>
                     </div>
   
