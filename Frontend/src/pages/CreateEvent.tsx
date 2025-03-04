@@ -47,6 +47,8 @@ interface RadioField extends BaseField {
     label: string;
   }>;
   selectedOption: number | null;
+  maxOptions: number;         // New property: max number of options
+  allowUserAddOptions: boolean; // New property: whether users can add options
 }
 
 interface CheckboxField extends BaseField {
@@ -56,6 +58,8 @@ interface CheckboxField extends BaseField {
     label: string;
     checked: boolean;
   }>;
+  maxOptions: number;         // New property: max number of options
+  allowUserAddOptions: boolean; // New property: whether users can add options
 }
 
 interface ListField extends BaseField {
@@ -240,7 +244,9 @@ const CreateEventForm = () => {
           { id: Date.now(), label: "Option 1" },
           { id: Date.now() + 1, label: "Option 2" }
         ],
-        selectedOption: null
+        selectedOption: null,
+        maxOptions: 0,              // Initialize with 0 (unlimited)
+        allowUserAddOptions: false  // Initialize with false
       };
       setFormFields([...formFields, radioField]);
     } else if (fieldType === FIELD_TYPES.CHECKBOX) {
@@ -255,7 +261,9 @@ const CreateEventForm = () => {
         options: [
           { id: Date.now(), label: "Option 1", checked: false },
           { id: Date.now() + 1, label: "Option 2", checked: false }
-        ]
+        ],
+        maxOptions: 0,              // Initialize with 0 (unlimited)
+        allowUserAddOptions: false  // Initialize with false
       };
       setFormFields([...formFields, checkboxField]);
     } else {
@@ -352,13 +360,15 @@ const handleSubmit = (e: React.FormEvent): void => {
         title: field.title,
       };
 
-      if (field.type === FIELD_TYPES.RADIO) {
-        const radioField = field as RadioField;
-        fieldData.options = radioField.options.map(opt => ({
+      if (field.type === FIELD_TYPES.CHECKBOX) {
+        const checkboxField = field as CheckboxField;
+        fieldData.options = checkboxField.options.map(opt => ({
           id: opt.id,
-          label: opt.label
+          label: opt.label,
+          checked: opt.checked
         }));
-        fieldData.selectedOption = radioField.selectedOption;
+        fieldData.maxOptions = checkboxField.maxOptions; // Add the new properties
+        fieldData.allowUserAddOptions = checkboxField.allowUserAddOptions;
       }
 
       if (field.type === FIELD_TYPES.CHECKBOX) {
@@ -619,132 +629,158 @@ const handleSubmit = (e: React.FormEvent): void => {
   
                                 {/* Radio field rendering */}
                                 {field.type === FIELD_TYPES.RADIO && (() => {
-                                  // Create a properly typed variable once for this section
-                                  const radioField = field as RadioField;
-                                  return (
-                                    <div className="space-y-2 mt-2">
-                                      {radioField.options.map((option) => (
-                                        <div key={option.id} className="flex items-center gap-2">
-                                          <input
-                                            type="radio"
-                                            checked={radioField.selectedOption === option.id}
-                                            onChange={() => 
-                                              updateFieldSettings(field.id, { selectedOption: option.id })
-                                            }
-                                            className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-                                          />
-                                          <Input
-                                            value={option.label}
-                                            onChange={(e) => {
-                                              const newOptions = radioField.options.map(opt =>
-                                                opt.id === option.id ? { ...opt, label: e.target.value } : opt
-                                              );
-                                              updateFieldSettings(field.id, { options: newOptions });
-                                            }}
-                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                            placeholder="Option label"
-                                          />
-                                          {(radioField.options.length > 2) && (
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => {
-                                                const newOptions = radioField.options.filter(opt => opt.id !== option.id);
-                                                updateFieldSettings(field.id, { options: newOptions });
-                                              }}
-                                              className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      ))}
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          const newOptions = [
-                                            ...radioField.options,
-                                            { id: Date.now(), label: "" }
-                                          ];
-                                          updateFieldSettings(field.id, { options: newOptions });
-                                        }}
-                                        className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-                                      >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Option
-                                      </Button>
-                                    </div>
-                                  );
-                                })()}
+  // Create a properly typed variable once for this section
+  const radioField = field as RadioField;
+  const reachedMaxOptions = radioField.maxOptions > 0 && radioField.options.length >= radioField.maxOptions;
+  
+  return (
+    <div className="space-y-2 mt-2">
+      {radioField.options.map((option) => (
+        <div key={option.id} className="flex items-center gap-2">
+          <input
+            type="radio"
+            checked={radioField.selectedOption === option.id}
+            onChange={() => 
+              updateFieldSettings(field.id, { selectedOption: option.id })
+            }
+            className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+          />
+          <Input
+            value={option.label}
+            onChange={(e) => {
+              const newOptions = radioField.options.map(opt =>
+                opt.id === option.id ? { ...opt, label: e.target.value } : opt
+              );
+              updateFieldSettings(field.id, { options: newOptions });
+            }}
+            className="bg-purple-800/50 border-purple-600 text-purple-100"
+            placeholder="Option label"
+          />
+          {(radioField.options.length > 2) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const newOptions = radioField.options.filter(opt => opt.id !== option.id);
+                updateFieldSettings(field.id, { options: newOptions });
+              }}
+              className="text-purple-100 hover:text-white hover:bg-purple-800"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      ))}
+      
+      {/* Only show Add Option button if max options haven't been reached */}
+      {!reachedMaxOptions && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const newOptions = [
+              ...radioField.options,
+              { id: Date.now(), label: "" }
+            ];
+            updateFieldSettings(field.id, { options: newOptions });
+          }}
+          className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Option
+        </Button>
+      )}
+      
+      {/* Display a message if max options are reached */}
+      {reachedMaxOptions && (
+        <p className="text-purple-400 text-xs mt-1 italic">
+          Maximum number of options reached ({radioField.maxOptions})
+        </p>
+      )}
+    </div>
+  );
+})()}
   
                                 {/* Checkbox field rendering */}
                                 {field.type === FIELD_TYPES.CHECKBOX && (() => {
-                                  // Create a properly typed variable once for this section
-                                  const checkboxField = field as CheckboxField;
-                                  return (
-                                    <div className="space-y-2 mt-2">
-                                      {checkboxField.options.map((option) => (
-                                        <div key={option.id} className="flex items-center gap-2">
-                                          <input
-                                            type="checkbox"
-                                            checked={option.checked}
-                                            onChange={() => {
-                                              const newOptions = checkboxField.options.map(opt =>
-                                                opt.id === option.id ? { ...opt, checked: !opt.checked } : opt
-                                              );
-                                              updateFieldSettings(field.id, { options: newOptions });
-                                            }}
-                                            className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-                                          />
-                                          <Input
-                                            value={option.label}
-                                            onChange={(e) => {
-                                              const newOptions = checkboxField.options.map(opt =>
-                                                opt.id === option.id ? { ...opt, label: e.target.value } : opt
-                                              );
-                                              updateFieldSettings(field.id, { options: newOptions });
-                                            }}
-                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                            placeholder="Option label"
-                                          />
-                                          {(checkboxField.options.length > 1) && (
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => {
-                                                const newOptions = checkboxField.options.filter(opt => opt.id !== option.id);
-                                                updateFieldSettings(field.id, { options: newOptions });
-                                              }}
-                                              className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      ))}
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          const newOptions = [
-                                            ...checkboxField.options,
-                                            { id: Date.now(), label: "", checked: false }
-                                          ];
-                                          updateFieldSettings(field.id, { options: newOptions });
-                                        }}
-                                        className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-                                      >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Option
-                                      </Button>
-                                    </div>
-                                  );
-                                })()}
+  // Create a properly typed variable once for this section
+  const checkboxField = field as CheckboxField;
+  const reachedMaxOptions = checkboxField.maxOptions > 0 && checkboxField.options.length >= checkboxField.maxOptions;
+  
+  return (
+    <div className="space-y-2 mt-2">
+      {checkboxField.options.map((option) => (
+        <div key={option.id} className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={option.checked}
+            onChange={() => {
+              const newOptions = checkboxField.options.map(opt =>
+                opt.id === option.id ? { ...opt, checked: !opt.checked } : opt
+              );
+              updateFieldSettings(field.id, { options: newOptions });
+            }}
+            className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+          />
+          <Input
+            value={option.label}
+            onChange={(e) => {
+              const newOptions = checkboxField.options.map(opt =>
+                opt.id === option.id ? { ...opt, label: e.target.value } : opt
+              );
+              updateFieldSettings(field.id, { options: newOptions });
+            }}
+            className="bg-purple-800/50 border-purple-600 text-purple-100"
+            placeholder="Option label"
+          />
+          {(checkboxField.options.length > 1) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const newOptions = checkboxField.options.filter(opt => opt.id !== option.id);
+                updateFieldSettings(field.id, { options: newOptions });
+              }}
+              className="text-purple-100 hover:text-white hover:bg-purple-800"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      ))}
+      
+      {/* Only show Add Option button if max options haven't been reached */}
+      {!reachedMaxOptions && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const newOptions = [
+              ...checkboxField.options,
+              { id: Date.now(), label: "", checked: false }
+            ];
+            updateFieldSettings(field.id, { options: newOptions });
+          }}
+          className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Option
+        </Button>
+      )}
+      
+      {/* Display a message if max options are reached */}
+      {reachedMaxOptions && (
+        <p className="text-purple-400 text-xs mt-1 italic">
+          Maximum number of options reached ({checkboxField.maxOptions})
+        </p>
+      )}
+    </div>
+  );
+})()}
   
                                 {/* List field rendering */}
                                 {field.type === FIELD_TYPES.LIST && (

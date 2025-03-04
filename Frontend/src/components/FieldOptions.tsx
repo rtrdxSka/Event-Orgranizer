@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // Define the types for our props to match the existing implementation
 interface BaseField {
@@ -23,6 +24,8 @@ interface RadioField extends BaseField {
     label: string;
   }>;
   selectedOption: number | null;
+  maxOptions?: number;
+  allowUserAddOptions?: boolean;
 }
 
 interface CheckboxField extends BaseField {
@@ -32,6 +35,8 @@ interface CheckboxField extends BaseField {
     label: string;
     checked: boolean;
   }>;
+  maxOptions?: number;
+  allowUserAddOptions?: boolean;
 }
 
 interface ListField extends BaseField {
@@ -80,8 +85,12 @@ const FieldOptions: React.FC<FieldOptionsProps> = ({ field, onUpdate }) => {
 
   const isOptional = !field.required && !field.readonly;
 
-  // For radio and checkbox fields, only show required toggle
+  // For radio and checkbox fields, show required toggle plus option settings
   if (field.type === 'radio' || field.type === 'checkbox') {
+    const typeField = field as (RadioField | CheckboxField);
+    const maxOptions = typeField.maxOptions || 0;
+    const allowUserAddOptions = typeField.allowUserAddOptions || false;
+
     return (
       <div className="space-y-3">
         <label className="block text-purple-200 text-sm font-medium">Field Type</label>
@@ -105,6 +114,53 @@ const FieldOptions: React.FC<FieldOptionsProps> = ({ field, onUpdate }) => {
             ? "Users must select an option." 
             : "Users can skip this field."}
         </p>
+
+        {/* New options settings */}
+        <div className="mt-4">
+          <label className="block text-purple-200 text-sm font-medium mb-2">
+            Maximum Options
+          </label>
+          <Input
+            type="number"
+            min="0"
+            value={maxOptions}
+            onChange={(e) =>
+              onUpdate({
+                maxOptions: parseInt(e.target.value) || 0
+              })
+            }
+            className="bg-purple-800/50 border-purple-600 text-purple-100"
+            placeholder="0 for unlimited"
+          />
+          <p className="text-purple-400 text-xs mt-1">
+            Set to 0 for unlimited options.
+          </p>
+        </div>
+
+        <div className="mt-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`allowUserAddOptions-${field.id}`}
+              checked={allowUserAddOptions}
+              onChange={(e) =>
+                onUpdate({
+                  allowUserAddOptions: e.target.checked
+                })
+              }
+              className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
+            />
+            <label
+              htmlFor={`allowUserAddOptions-${field.id}`}
+              className="text-purple-200"
+            >
+              Allow users to add options
+            </label>
+          </div>
+          <p className="text-purple-400 text-xs mt-1">
+            If enabled, users can add their own options to this field.
+          </p>
+        </div>
       </div>
     );
   }
