@@ -19,7 +19,16 @@ export interface ApiError {
   status?: number;
 }
 
-interface BaseField {
+export type FieldType = "text" | "list" | "radio" | "checkbox";
+
+export const FIELD_TYPES: Record<string, FieldType> = {
+  TEXT: "text",
+  LIST: "list",
+  RADIO: "radio",
+  CHECKBOX: "checkbox",
+};
+
+export interface BaseField {
   id: number;
   type: FieldType;
   title: string;
@@ -30,39 +39,80 @@ interface BaseField {
 }
 
 export interface TextField extends BaseField {
-  type: 'text';
+  type: "text";
 }
 
 export interface RadioField extends BaseField {
-  type: 'radio';
+  type: "radio";
   options: Array<{
     id: number;
     label: string;
   }>;
   selectedOption: number | null;
+  maxOptions: number;
+  allowUserAddOptions: boolean;
+}
+
+export interface CheckboxField extends BaseField {
+  type: "checkbox";
+  options: Array<{
+    id: number;
+    label: string;
+    checked: boolean;
+  }>;
+  maxOptions: number;
+  allowUserAddOptions: boolean;
 }
 
 export interface ListField extends BaseField {
-  type: 'list';
+  type: "list";
   values: string[];
   maxEntries: number;
   allowUserAdd: boolean;
 }
 
+export type Field = TextField | ListField | RadioField | CheckboxField;
+
+export type TextFieldSettings = Partial<Omit<TextField, "id" | "type">>;
+export type ListFieldSettings = Partial<Omit<ListField, "id" | "type">>;
+export type RadioFieldSettings = Partial<Omit<RadioField, "id" | "type">>;
+export type CheckboxFieldSettings = Partial<Omit<CheckboxField, "id" | "type">>;
+export type FieldSettings =
+  | TextFieldSettings
+  | ListFieldSettings
+  | RadioFieldSettings
+  | CheckboxFieldSettings;
+
+export interface DragItem {
+  type: FieldType;
+}
+
 export interface EventFormData {
   name: string;
   description: string;
-  eventDate: string;
-  place: string;
+  eventDates: {
+    dates: string[];
+    maxDates: number;
+    allowUserAdd: boolean;
+  };
+  place: {
+    places: string[];
+    maxPlaces: number;
+    allowUserAdd: boolean;
+  };
 }
 
-export interface CheckboxField {
-  id: number;
-  type: 'checkbox';
-  title: string;
-  placeholder: string;
-  value: string;
-  required: boolean;
-  readonly: boolean;
-  options: Array<{ id: number; label: string; checked: boolean }>;
-}
+export const initialFormData: EventFormData = {
+  name: "",
+  description: "",
+  eventDates: {
+    dates: [""],
+    maxDates: 0,
+    allowUserAdd: true,
+  },
+  place: {
+    places: [""],
+    maxPlaces: 0,
+    allowUserAdd: true,
+  },
+};

@@ -126,6 +126,10 @@ export const validateListField = (field: ListField): string | true => {
   const nonEmptyValues = field.values.filter(v => v.trim() !== '');
   
   if (field.readonly) {
+
+    if(field.allowUserAdd) {
+      return "Read-only list fields cannot allow users to add entries";
+    }
     // For readonly list fields: all entries must have values
     if (field.maxEntries > 0) {
       // If max entries is set
@@ -203,9 +207,9 @@ export const validateEventDates = (eventDates: EventDatesSchema): string | true 
   // Check if users can add dates
   if (!eventDates.allowUserAdd) {
     // If users can't add dates, we must provide an empty field for them
-    if (!hasEmptyField) {
-      return "Must include an empty date field for user input since users cannot add their own dates";
-    }
+    // if (!hasEmptyField) {
+    //   return "Must include an empty date field for user input since users cannot add their own dates";
+    // }
   } else {
     // If users can add dates, either need an empty field or room for more
     if (!hasEmptyField && !hasRoomForMore) {
@@ -221,12 +225,54 @@ export const validateEventDates = (eventDates: EventDatesSchema): string | true 
   return true;
 };
 
+export const eventPlaceSchema = z.object({
+  places: z.array(z.string()).min(1, "At least one place for the event must be provided").refine(
+    places => places.filter(place => place.trim() !== '').length > 0,
+    "At least one event date must have a value"
+  ),
+  maxPlaces: z.number().min(0, "Max dates cannot be negative"),
+  allowUserAdd: z.boolean().default(true) // Default to allowing users to add dates
+});
+
+export type EventPlaceSchema = z.infer<typeof eventPlaceSchema>;
+
+export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | true => {
+  const nonEmptyDates = eventPlaces.places.filter(place => place.trim() !== '');
+  
+  if (nonEmptyDates.length === 0) {
+    return "At least one event date must be provided";
+  }
+  
+  const hasEmptyField = eventPlaces.places.some(place => place.trim() === '');
+  const hasRoomForMore = eventPlaces.maxPlaces === 0 || eventPlaces.places.length < eventPlaces.maxPlaces;
+  
+  // Check if users can add dates
+  if (!eventPlaces.allowUserAdd) {
+    // If users can't add dates, we must provide an empty field for them
+    // if (!hasEmptyField) {
+    //   return "Must include an empty date field for user input since users cannot add their own dates";
+    // }
+  } else {
+    // If users can add dates, either need an empty field or room for more
+    if (!hasEmptyField && !hasRoomForMore) {
+      return "Must either have an empty date field or room for more dates";
+    }
+  }
+  
+  // Additional validation for max dates
+  if (eventPlaces.maxPlaces > 0 && eventPlaces.places.length > eventPlaces.maxPlaces) {
+    return `Number of dates (${eventPlaces.places.length}) exceeds maximum allowed (${eventPlaces.maxPlaces})`;
+  }
+  
+  return true;
+};
+
 // Main event form schema
 export const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
   description: z.string().min(1, "Event description is required"),
   eventDates: eventDatesSchema,
-  place: z.string().optional(),
+  place: eventPlaceSchema,
   formFields: z.array(fieldSchema),
 });
 
@@ -236,8 +282,14 @@ export type EventFormSchema = z.infer<typeof eventFormSchema>;
 export const validateForm = (data: EventFormSchema): string | true => {
   // Validate event dates
   const dateValidation = validateEventDates(data.eventDates);
+  const placeValidation = validateEventPlaces(data.place);
+  
   if (dateValidation !== true) {
     return `Event Dates: ${dateValidation}`;
+  }
+
+  if(placeValidation !== true) {
+    return `Event Places: ${placeValidation}`;
   }
   
   // Validate each field (existing logic unchanged)

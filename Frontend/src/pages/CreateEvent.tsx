@@ -21,6 +21,7 @@ import FormFieldDropZone from "@/components/EventComponents/FormFieldDropZone";
 import EventFormFields from "@/components/EventComponents/EventFormFields";
 import CustomFieldsList from "@/components/EventComponents/CustomFieldsList";
 import DraggableField from "@/components/EventComponents/DraggebleField";
+import { toast } from "sonner";
 
 const CreateEventForm = () => {
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
@@ -48,38 +49,78 @@ const CreateEventForm = () => {
     }));
   };
 
-  const handleAllowUserAddChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ): void => {
+  const handlePlaceChange = (places: string[]): void => {
     setFormData((prev) => ({
       ...prev,
-      eventDates: {
-        ...prev.eventDates,
-        allowUserAdd: e.target.checked,
+      place: {
+        ...prev.place,
+        places: places,
       },
     }));
   };
 
-  const handleMaxDatesChange = (
+  const handleAllowUserAddChange = (fieldName: string) => (
     e: React.ChangeEvent<HTMLInputElement>
   ): void => {
-    const maxDates = parseInt(e.target.value) || 0;
-    setFormData((prev) => {
-      const currentDates = [...prev.eventDates.dates];
-      const newDates =
-        maxDates > 0 && currentDates.length > maxDates
-          ? currentDates.slice(0, maxDates)
-          : currentDates;
-
-      return {
+    if (fieldName === "eventDates") {
+      setFormData((prev) => ({
         ...prev,
         eventDates: {
           ...prev.eventDates,
-          maxDates: maxDates,
-          dates: newDates,
+          allowUserAdd: e.target.checked,
         },
-      };
-    });
+      }));
+    } else if (fieldName === "place") {
+      setFormData((prev) => ({
+        ...prev,
+        place: {
+          ...prev.place,
+          allowUserAdd: e.target.checked,
+        },
+      }));
+    }
+  };
+
+  const handleMaxValuesChange = (fieldName: string) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): void => {
+    const maxValue = parseInt(e.target.value) || 0;
+    
+    if (fieldName === "eventDates") {
+      setFormData((prev) => {
+        const currentDates = [...prev.eventDates.dates];
+        const newDates =
+          maxValue > 0 && currentDates.length > maxValue
+            ? currentDates.slice(0, maxValue)
+            : currentDates;
+
+        return {
+          ...prev,
+          eventDates: {
+            ...prev.eventDates,
+            maxDates: maxValue,
+            dates: newDates,
+          },
+        };
+      });
+    } else if (fieldName === "place") {
+      setFormData((prev) => {
+        const currentPlaces = [...prev.place.places];
+        const newPlaces =
+          maxValue > 0 && currentPlaces.length > maxValue
+            ? currentPlaces.slice(0, maxValue)
+            : currentPlaces;
+
+        return {
+          ...prev,
+          place: {
+            ...prev.place,
+            maxPlaces: maxValue,
+            places: newPlaces,
+          },
+        };
+      });
+    }
   };
 
   // Custom field handlers
@@ -180,7 +221,11 @@ const CreateEventForm = () => {
           maxDates: formData.eventDates.maxDates,
           allowUserAdd: formData.eventDates.allowUserAdd,
         },
-        place: formData.place,
+        place: {
+          places: formData.place.places,
+          maxPlaces: formData.place.maxPlaces,
+          allowUserAdd: formData.place.allowUserAdd,
+        },
         formFields: formFields,
       };
 
@@ -203,8 +248,17 @@ const CreateEventForm = () => {
         (date) => date.trim() !== ""
       );
 
+      const validPlaces = formData.place.places.filter(
+        (place) => place.trim() !== ""
+      );
+
       const dateOptions = validDates.map((date) => ({
         optionName: new Date(date).toISOString(),
+        votes: [],
+      }));
+
+      const placeOptions = validPlaces.map((place) => ({
+        optionName: place,
         votes: [],
       }));
 
@@ -286,30 +340,65 @@ const CreateEventForm = () => {
       const eventData = {
         name: formData.name,
         description: formData.description,
-        place: formData.place || null,
         customFields,
         eventDates: {
           dates: validDates.map((date) => new Date(date).toISOString()),
           maxDates: formData.eventDates.maxDates,
           allowUserAdd: formData.eventDates.allowUserAdd,
         },
+        eventPlaces: {
+          places: validPlaces,
+          maxPlaces: formData.place.maxPlaces,
+          allowUserAdd: formData.place.allowUserAdd,
+        },
         votingCategories: [
           {
             categoryName: "date",
             options: dateOptions,
           },
+          {
+            categoryName: "place",
+            options: placeOptions,
+          }
         ],
       };
 
       // Submit the form
       console.log("Event Data:", eventData);
+      toast.custom(() => (
+        <div className="bg-white text-green-800 font-medium p-4 rounded-md shadow-lg border-l-4 border-green-600">
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <h3 className="font-bold text-base">Event created successfully!</h3>
+              <p className="text-sm text-gray-800 mt-1">
+                Your event has been created and is now ready to share.
+              </p>
+            </div>
+          </div>
+        </div>
+      ), {
+        duration: 5000,
+        id: 'success-toast',
+      });
       // await submitEvent(eventData);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
 
       console.error("Form submission error:", errorMessage);
-      alert(errorMessage);
+      toast.custom(() => (
+        <div className="bg-white text-red-900 font-medium p-4 rounded-md shadow-lg border-l-4 border-red-600">
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <h3 className="font-bold text-base">Error creating event</h3>
+              <p className="text-sm text-gray-800 mt-1">{errorMessage}</p>
+            </div>
+          </div>
+        </div>
+      ), {
+        duration: 5000,
+        id: 'error-toast',
+      });
     }
   };
 
@@ -346,7 +435,8 @@ const CreateEventForm = () => {
                     handleInputChange={handleInputChange}
                     handleDateChange={handleDateChange}
                     handleAllowUserAddChange={handleAllowUserAddChange}
-                    handleMaxDatesChange={handleMaxDatesChange}
+                    handleMaxValuesChange={handleMaxValuesChange}
+                    handlePlaceChange={handlePlaceChange}
                   />
 
                   {/* Custom Fields Drop Zone */}
