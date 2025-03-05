@@ -5,7 +5,7 @@ import Register from "./pages/Register"
 import VerifyEmail from "./pages/VerifyEmail"
 import ForgotPassword from "./pages/ForgotPassword"
 import ResetPassword from "./pages/ResetPassword"
-
+import { Toaster } from 'sonner';
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { GuestRoute } from "./components/GuesRoute"
 import Profile from "./pages/Profile"
@@ -17,6 +17,7 @@ function App() {
   const navigate = useNavigate();
   setNavigate(navigate);
   return (
+    <>
     <Routes>
       <Route path="/" element={<Home />} />
       
@@ -77,6 +78,20 @@ function App() {
         } 
       />
     </Routes>
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        style: {
+          background: '#4c1d95', // purple-950
+          color: '#f5f3ff', // lighter purple, almost white for better contrast
+          border: '1px solid #6b21a8', // purple-800
+          fontSize: '0.95rem',
+          fontWeight: '500'
+        },
+        className: 'custom-toast',
+      }}
+    />
+    </>
   );
 }
 
