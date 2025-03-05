@@ -1,5 +1,4 @@
 import API from "@/config/apiClient";
-import { CreateEventInput, createEventValidationSchema } from './validations/event.schemas';
 import { User } from "@/types";
 
 type LoginParams = {

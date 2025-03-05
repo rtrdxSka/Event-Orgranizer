@@ -58,9 +58,6 @@ export const validateRadioField = (field: RadioField): string | true => {
     if (field.selectedOption === null) {
       return "Read-only radio fields must have a selected option";
     }
-  } else if (field.selectedOption !== null) {
-    // For required/optional fields, should not have a selection during creation
-    return `${field.required ? 'Required' : 'Optional'} radio fields should not have a selection during creation`;
   }
   
   // Validate that all options have labels
