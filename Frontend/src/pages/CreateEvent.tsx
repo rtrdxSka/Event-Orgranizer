@@ -1,14 +1,8 @@
-import React, { useState  } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  MapPin,
-  Plus,
-  X,
-  GripVertical,
-  Settings,
-} from "lucide-react";
+import { MapPin, Plus, X, GripVertical, Settings } from "lucide-react";
 import { useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { DndProvider } from "react-dnd";
@@ -17,13 +11,13 @@ import FieldOptions from "@/components/FieldOptions";
 import MultiDateField from "@/components/MultiDateField";
 import { eventFormSchema, validateForm } from "@/lib/validations/event.schemas";
 
-type FieldType = 'text' | 'list' | 'radio' | 'checkbox';
+type FieldType = "text" | "list" | "radio" | "checkbox";
 
 const FIELD_TYPES: Record<string, FieldType> = {
   TEXT: "text",
   LIST: "list",
   RADIO: "radio",
-  CHECKBOX: "checkbox"
+  CHECKBOX: "checkbox",
 };
 
 interface BaseField {
@@ -37,33 +31,33 @@ interface BaseField {
 }
 
 interface TextField extends BaseField {
-  type: 'text';
+  type: "text";
 }
 
 interface RadioField extends BaseField {
-  type: 'radio';
+  type: "radio";
   options: Array<{
     id: number;
     label: string;
   }>;
   selectedOption: number | null;
-  maxOptions: number;         // New property: max number of options
+  maxOptions: number; // New property: max number of options
   allowUserAddOptions: boolean; // New property: whether users can add options
 }
 
 interface CheckboxField extends BaseField {
-  type: 'checkbox';
+  type: "checkbox";
   options: Array<{
     id: number;
     label: string;
     checked: boolean;
   }>;
-  maxOptions: number;         // New property: max number of options
+  maxOptions: number; // New property: max number of options
   allowUserAddOptions: boolean; // New property: whether users can add options
 }
 
 interface ListField extends BaseField {
-  type: 'list';
+  type: "list";
   values: string[];
   maxEntries: number;
   allowUserAdd: boolean;
@@ -71,11 +65,15 @@ interface ListField extends BaseField {
 
 type Field = TextField | ListField | RadioField | CheckboxField;
 
-type TextFieldSettings = Partial<Omit<TextField, 'id' | 'type'>>;
-type ListFieldSettings = Partial<Omit<ListField, 'id' | 'type'>>;
-type RadioFieldSettings = Partial<Omit<RadioField, 'id' | 'type'>>;
-type CheckboxFieldSettings = Partial<Omit<CheckboxField, 'id' | 'type'>>;
-type FieldSettings = TextFieldSettings | ListFieldSettings | RadioFieldSettings | CheckboxFieldSettings;
+type TextFieldSettings = Partial<Omit<TextField, "id" | "type">>;
+type ListFieldSettings = Partial<Omit<ListField, "id" | "type">>;
+type RadioFieldSettings = Partial<Omit<RadioField, "id" | "type">>;
+type CheckboxFieldSettings = Partial<Omit<CheckboxField, "id" | "type">>;
+type FieldSettings =
+  | TextFieldSettings
+  | ListFieldSettings
+  | RadioFieldSettings
+  | CheckboxFieldSettings;
 
 interface DragItem {
   type: FieldType;
@@ -108,9 +106,13 @@ const DraggableField = ({ type }: DraggableFieldProps) => {
     >
       <GripVertical className="h-5 w-5 text-purple-400" />
       <span className="text-purple-100">
-        {type === FIELD_TYPES.TEXT ? "Text Field" : 
-         type === FIELD_TYPES.LIST ? "List Field" : 
-         type === FIELD_TYPES.CHECKBOX ? "Checkbox Field" : "Radio Field"}
+        {type === FIELD_TYPES.TEXT
+          ? "Text Field"
+          : type === FIELD_TYPES.LIST
+          ? "List Field"
+          : type === FIELD_TYPES.CHECKBOX
+          ? "Checkbox Field"
+          : "Radio Field"}
       </span>
     </div>
   );
@@ -146,8 +148,9 @@ interface EventFormData {
   name: string;
   description: string;
   eventDates: {
-    dates: string[]; 
+    dates: string[];
     maxDates: number;
+    allowUserAdd: boolean;
   };
   place: string;
 }
@@ -156,8 +159,9 @@ const initialFormData: EventFormData = {
   name: "",
   description: "",
   eventDates: {
-    dates: [""], 
-    maxDates: 0
+    dates: [""],
+    maxDates: 0,
+    allowUserAdd: true,
   },
   place: "",
 };
@@ -165,7 +169,9 @@ const initialFormData: EventFormData = {
 const CreateEventForm = () => {
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ): void => {
     const { name, value } = e.target;
     setFormData((prev: EventFormData) => ({
       ...prev,
@@ -175,30 +181,44 @@ const CreateEventForm = () => {
 
   const handleDateChange = (dates: string[]): void => {
     setFormData((prev) => {
-      // Create a completely new object to avoid type issues
       return {
-        name: prev.name,
-        description: prev.description,
-        place: prev.place,
+        ...prev,
         eventDates: {
-          maxDates: prev.eventDates.maxDates,
-          dates: dates // Use the dates parameter directly
-        }
+          ...prev.eventDates,
+          dates: dates,
+        },
       };
     });
   };
-  
-  const handleMaxDatesChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+
+  const handleAllowUserAddChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): void => {
+    setFormData((prev) => {
+      return {
+        ...prev,
+        eventDates: {
+          ...prev.eventDates,
+          allowUserAdd: e.target.checked,
+        },
+      };
+    });
+  };
+
+  const handleMaxDatesChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): void => {
     const maxDates = parseInt(e.target.value) || 0;
     setFormData((prev) => {
       // Get the current dates
       const currentDates = [...prev.eventDates.dates];
-      
+
       // Apply the trim logic
-      const newDates = maxDates > 0 && currentDates.length > maxDates
-        ? currentDates.slice(0, maxDates)
-        : currentDates;
-      
+      const newDates =
+        maxDates > 0 && currentDates.length > maxDates
+          ? currentDates.slice(0, maxDates)
+          : currentDates;
+
       // Return a fully typed new state object
       return {
         name: prev.name,
@@ -206,8 +226,9 @@ const CreateEventForm = () => {
         place: prev.place,
         eventDates: {
           maxDates: maxDates,
-          dates: newDates
-        }
+          dates: newDates,
+          allowUserAdd: prev.eventDates.allowUserAdd,
+        },
       };
     });
   };
@@ -219,7 +240,7 @@ const CreateEventForm = () => {
     // Create the appropriate field based on type
     if (fieldType === FIELD_TYPES.LIST) {
       const listField: ListField = {
-        type: 'list',
+        type: "list",
         id: Date.now(),
         title: "New Field",
         placeholder: "Value here",
@@ -233,7 +254,7 @@ const CreateEventForm = () => {
       setFormFields([...formFields, listField]);
     } else if (fieldType === FIELD_TYPES.RADIO) {
       const radioField: RadioField = {
-        type: 'radio',
+        type: "radio",
         id: Date.now(),
         title: "New Field",
         placeholder: "Value here",
@@ -242,16 +263,16 @@ const CreateEventForm = () => {
         readonly: false,
         options: [
           { id: Date.now(), label: "Option 1" },
-          { id: Date.now() + 1, label: "Option 2" }
+          { id: Date.now() + 1, label: "Option 2" },
         ],
         selectedOption: null,
-        maxOptions: 0,              // Initialize with 0 (unlimited)
-        allowUserAddOptions: false  // Initialize with false
+        maxOptions: 0, // Initialize with 0 (unlimited)
+        allowUserAddOptions: false, // Initialize with false
       };
       setFormFields([...formFields, radioField]);
     } else if (fieldType === FIELD_TYPES.CHECKBOX) {
       const checkboxField: CheckboxField = {
-        type: 'checkbox',
+        type: "checkbox",
         id: Date.now(),
         title: "New Field",
         placeholder: "Value here",
@@ -260,33 +281,33 @@ const CreateEventForm = () => {
         readonly: false,
         options: [
           { id: Date.now(), label: "Option 1", checked: false },
-          { id: Date.now() + 1, label: "Option 2", checked: false }
+          { id: Date.now() + 1, label: "Option 2", checked: false },
         ],
-        maxOptions: 0,              // Initialize with 0 (unlimited)
-        allowUserAddOptions: false  // Initialize with false
+        maxOptions: 0, // Initialize with 0 (unlimited)
+        allowUserAddOptions: false, // Initialize with false
       };
       setFormFields([...formFields, checkboxField]);
     } else {
       const textField: TextField = {
-        type: 'text',
+        type: "text",
         id: Date.now(),
         title: "New Field",
         placeholder: "Value here",
         value: "",
         required: false,
-        readonly: false
+        readonly: false,
       };
       setFormFields([...formFields, textField]);
     }
   };
 
-  const updateFieldTitle = (id:number, title:string) => {
+  const updateFieldTitle = (id: number, title: string) => {
     setFormFields(
       formFields.map((field) => (field.id === id ? { ...field, title } : field))
     );
   };
 
-  const updateFieldValue = (id:number, value:string) => {
+  const updateFieldValue = (id: number, value: string) => {
     setFormFields(
       formFields.map((field) => (field.id === id ? { ...field, value } : field))
     );
@@ -304,149 +325,91 @@ const CreateEventForm = () => {
     (field) => field.id === selectedFieldId
   );
 
-// Replace your current handleSubmit function with this version
-// Updated handleSubmit function to work with the new schema structure
-const handleSubmit = (e: React.FormEvent): void => {
-  e.preventDefault();
+  // Replace your current handleSubmit function with this version
+  // Updated handleSubmit function to work with the new schema structure
+  const handleSubmit = (e: React.FormEvent): void => {
+    e.preventDefault();
 
-  try {
-    // Use Zod for validation with the new structure
-    const validationData = {
-      name: formData.name,
-      description: formData.description,
-      // Pass the whole eventDates object now
-      eventDates: {
-        dates: formData.eventDates.dates,
-        maxDates: formData.eventDates.maxDates,
-      },
-      place: formData.place,
-      formFields: formFields
-    };
-    
-    // First validate the structure with Zod
-    const validationResult = eventFormSchema.safeParse(validationData);
-    
-    if (!validationResult.success) {
-      // Extract the first error message
-      const firstError = validationResult.error.errors[0];
-      throw new Error(firstError.message);
-    }
-    
-    // Then use the custom validator for field-specific validation
-    const customValidationResult = validateForm(validationResult.data);
-    if (customValidationResult !== true) {
-      throw new Error(customValidationResult);
-    }
-    
-    // If validation passes, continue with the existing logic
-    // Filter valid dates from the structure
-    const validDates = formData.eventDates.dates.filter(date => date.trim() !== '');
-
-    const dateOptions = validDates.map(date => ({
-      optionName: new Date(date).toISOString(),
-      votes: []
-    }));
-
-    // Transform custom fields into the required format
-    const customFieldsObject = formFields.reduce((acc: Record<string, any>, field) => {
-      const isOptional = !field.required && !field.readonly;
-      
-      const fieldData = {
-        type: field.type,
-        placeholder: field.placeholder,
-        required: field.required,
-        readonly: field.readonly,
-        optional: isOptional,
-        title: field.title,
+    try {
+      // Use Zod for validation with the new structure
+      const validationData = {
+        name: formData.name,
+        description: formData.description,
+        // Pass the whole eventDates object now with allowUserAdd
+        eventDates: {
+          dates: formData.eventDates.dates,
+          maxDates: formData.eventDates.maxDates,
+          allowUserAdd: formData.eventDates.allowUserAdd,
+        },
+        place: formData.place,
+        formFields: formFields,
       };
 
-      if (field.type === FIELD_TYPES.CHECKBOX) {
-        const checkboxField = field as CheckboxField;
-        fieldData.options = checkboxField.options.map(opt => ({
-          id: opt.id,
-          label: opt.label,
-          checked: opt.checked
-        }));
-        fieldData.maxOptions = checkboxField.maxOptions; // Add the new properties
-        fieldData.allowUserAddOptions = checkboxField.allowUserAddOptions;
+      // First validate the structure with Zod
+      const validationResult = eventFormSchema.safeParse(validationData);
+
+      if (!validationResult.success) {
+        // Extract the first error message
+        const firstError = validationResult.error.errors[0];
+        throw new Error(firstError.message);
       }
 
-      if (field.type === FIELD_TYPES.CHECKBOX) {
-        const checkboxField = field as CheckboxField;
-        fieldData.options = checkboxField.options.map(opt => ({
-          id: opt.id,
-          label: opt.label,
-          checked: opt.checked
-        }));
+      // Then use the custom validator for field-specific validation
+      const customValidationResult = validateForm(validationResult.data);
+      if (customValidationResult !== true) {
+        throw new Error(customValidationResult);
       }
 
-      if (field.type === FIELD_TYPES.LIST) {
-        const listField = field as ListField;
-        fieldData.maxEntries = listField.maxEntries;
-        fieldData.allowUserAdd = listField.allowUserAdd;
-        // Only include non-empty values for readonly fields
-        fieldData.values = field.readonly 
-          ? listField.values.filter(v => v.trim() !== '')
-          : listField.values;
-      } else {
-        // Only include value for readonly fields
-        fieldData.value = field.readonly ? field.value : '';
-      }
+      // If validation passes, continue with form submission
+      // Filter valid dates from the structure
+      const validDates = formData.eventDates.dates.filter(
+        (date) => date.trim() !== ""
+      );
 
-      acc[field.title] = fieldData;
-      return acc;
-    }, {});
-    
-    // Create the event data with the updated structure
-    const eventData = {
-      name: formData.name,
-      description: formData.description,
-      place: formData.place || null,
-      customFields: {
-        ...customFieldsObject
-      },
-      // Use the consolidated eventDates structure
-      eventDates: {
-        dates: validDates.map(date => new Date(date).toISOString()),
-        maxDates: formData.eventDates.maxDates
-      },
-      votingCategories: [
-        {
-          categoryName: "date",
-          options: dateOptions
+      const dateOptions = validDates.map((date) => ({
+        optionName: new Date(date).toISOString(),
+        votes: [],
+      }));
+
+      // Create the event data with the updated structure
+      const eventData = {
+        name: formData.name,
+        description: formData.description,
+        place: formData.place || null,
+        customFields: {
+          // ...existing custom fields logic...
         },
-        {
-          categoryName: "time",
-          options: [],
+        // Include the allowUserAdd property in the eventDates
+        eventDates: {
+          dates: validDates.map((date) => new Date(date).toISOString()),
+          maxDates: formData.eventDates.maxDates,
+          allowUserAdd: formData.eventDates.allowUserAdd,
         },
-        {
-          categoryName: "place",
-          options: formData.place
-            ? [{ optionName: formData.place, votes: [] }]
-            : [],
-        },
-      ],
-    };
-    
-    // The rest of your submit handler remains the same
-    console.log("Form Fields:", formFields);
-    console.log("Custom Fields Object:", customFieldsObject);
-    console.log("Event Data:", eventData);
-    
-    // Here you would submit the data
-    // await submitEvent(eventData);
-    
-  } catch (error) {
-    // Create a properly typed error object
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : 'An unknown error occurred';
-      
-    console.error("Form submission error:", errorMessage);
-    // You should show this error to the user in your UI
-    alert(errorMessage); // Replace with proper error handling UI
-  }
-};
+        votingCategories: [
+          {
+            categoryName: "date",
+            options: dateOptions,
+          },
+          // ...other categories...
+        ],
+      };
+
+      // Submit the form
+      console.log("Event Data:", eventData);
+      // await submitEvent(eventData);
+
+      // Here you would submit the data
+      // await submitEvent(eventData);
+    } catch (error) {
+      // Create a properly typed error object
+      const errorMessage =
+        error instanceof Error ? error.message : "An unknown error occurred";
+
+      console.error("Form submission error:", errorMessage);
+      // You should show this error to the user in your UI
+      alert(errorMessage); // Replace with proper error handling UI
+    }
+  };
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="min-h-screen bg-purple-950">
@@ -467,13 +430,13 @@ const handleSubmit = (e: React.FormEvent): void => {
                     <DraggableField type={FIELD_TYPES.CHECKBOX} />
                   </div>
                 </div>
-  
+
                 {/* Form Builder Area - expanded to col-span-10 */}
                 <div className="col-span-10 bg-purple-900/40 rounded-xl p-8 border border-purple-700/50">
                   <h1 className="text-4xl font-bold text-purple-100 mb-8">
                     Create New Event
                   </h1>
-  
+
                   {/* Standard Form Fields */}
                   <div className="space-y-6 mb-8">
                     <div>
@@ -489,7 +452,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                         required
                       />
                     </div>
-  
+
                     <div>
                       <label className="block text-purple-100 mb-2">
                         Description *
@@ -505,12 +468,15 @@ const handleSubmit = (e: React.FormEvent): void => {
                       />
                     </div>
 
-  
- <div>
+                    <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-purple-100">Event Dates *</label>
+                        <label className="block text-purple-100">
+                          Event Dates *
+                        </label>
                         <div className="flex items-center gap-2">
-                          <label className="text-purple-100 text-sm">Max Dates:</label>
+                          <label className="text-purple-100 text-sm">
+                            Max Dates:
+                          </label>
                           <Input
                             type="number"
                             min="0"
@@ -521,18 +487,42 @@ const handleSubmit = (e: React.FormEvent): void => {
                           />
                         </div>
                       </div>
-                      <MultiDateField 
-                        dates={formData.eventDates.dates} 
-                        maxDates={formData.eventDates.maxDates} 
-                        onChange={handleDateChange} 
+
+                      <MultiDateField
+                        dates={formData.eventDates.dates}
+                        maxDates={formData.eventDates.maxDates}
+                        onChange={handleDateChange}
                       />
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="checkbox"
+                          id="allowUserAddDates"
+                          checked={formData.eventDates.allowUserAdd}
+                          onChange={handleAllowUserAddChange}
+                          className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
+                        />
+                        <label
+                          htmlFor="allowUserAddDates"
+                          className="text-purple-200"
+                        >
+                          Allow users to add dates
+                        </label>
+                      </div>
+
                       <p className="text-purple-400 text-sm mt-1">
-                        {formData.eventDates.maxDates === 0 
-                          ? "Users can suggest unlimited dates" 
-                          : `Users can suggest up to ${formData.eventDates.maxDates} dates`}
+                        {formData.eventDates.maxDates === 0
+                          ? formData.eventDates.allowUserAdd
+                            ? "Users can suggest unlimited dates"
+                            : "Fixed dates only (users cannot add dates)"
+                          : formData.eventDates.allowUserAdd
+                          ? `Users can suggest up to ${formData.eventDates.maxDates} dates`
+                          : `Fixed dates only (limit: ${formData.eventDates.maxDates})`}
                       </p>
                     </div>
-  
+
+                    
+
                     <div>
                       <label className="block text-purple-100 mb-2">
                         Place
@@ -549,7 +539,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                       </div>
                     </div>
                   </div>
-  
+
                   {/* Custom Fields Drop Zone */}
                   <div className="mb-8">
                     <h2 className="text-xl font-semibold text-purple-100 mb-4">
@@ -557,7 +547,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                     </h2>
                     <FormFieldDropZone onDrop={handleFieldDrop} />
                   </div>
-  
+
                   {/* Added Fields Display with inline settings */}
                   {formFields.length > 0 && (
                     <div className="space-y-4 mb-8">
@@ -584,7 +574,13 @@ const handleSubmit = (e: React.FormEvent): void => {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
+                                onClick={() =>
+                                  setSelectedFieldId(
+                                    selectedFieldId === field.id
+                                      ? null
+                                      : field.id
+                                  )
+                                }
                                 className={`text-purple-100 hover:text-white hover:bg-purple-800 ${
                                   selectedFieldId === field.id
                                     ? "bg-purple-800"
@@ -610,7 +606,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
-  
+
                             {/* Field content and inline settings */}
                             <div className="flex gap-4">
                               {/* Field content area */}
@@ -626,207 +622,293 @@ const handleSubmit = (e: React.FormEvent): void => {
                                     placeholder={field.placeholder}
                                   />
                                 )}
-  
+
                                 {/* Radio field rendering */}
-                                {field.type === FIELD_TYPES.RADIO && (() => {
-  // Create a properly typed variable once for this section
-  const radioField = field as RadioField;
-  const reachedMaxOptions = radioField.maxOptions > 0 && radioField.options.length >= radioField.maxOptions;
-  
-  return (
-    <div className="space-y-2 mt-2">
-      {radioField.options.map((option) => (
-        <div key={option.id} className="flex items-center gap-2">
-          <input
-            type="radio"
-            checked={radioField.selectedOption === option.id}
-            onChange={() => 
-              updateFieldSettings(field.id, { selectedOption: option.id })
-            }
-            className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-          />
-          <Input
-            value={option.label}
-            onChange={(e) => {
-              const newOptions = radioField.options.map(opt =>
-                opt.id === option.id ? { ...opt, label: e.target.value } : opt
-              );
-              updateFieldSettings(field.id, { options: newOptions });
-            }}
-            className="bg-purple-800/50 border-purple-600 text-purple-100"
-            placeholder="Option label"
-          />
-          {(radioField.options.length > 2) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const newOptions = radioField.options.filter(opt => opt.id !== option.id);
-                updateFieldSettings(field.id, { options: newOptions });
-              }}
-              className="text-purple-100 hover:text-white hover:bg-purple-800"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      ))}
-      
-      {/* Only show Add Option button if max options haven't been reached */}
-      {!reachedMaxOptions && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            const newOptions = [
-              ...radioField.options,
-              { id: Date.now(), label: "" }
-            ];
-            updateFieldSettings(field.id, { options: newOptions });
-          }}
-          className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Option
-        </Button>
-      )}
-      
-      {/* Display a message if max options are reached */}
-      {reachedMaxOptions && (
-        <p className="text-purple-400 text-xs mt-1 italic">
-          Maximum number of options reached ({radioField.maxOptions})
-        </p>
-      )}
-    </div>
-  );
-})()}
-  
-                                {/* Checkbox field rendering */}
-                                {field.type === FIELD_TYPES.CHECKBOX && (() => {
-  // Create a properly typed variable once for this section
-  const checkboxField = field as CheckboxField;
-  const reachedMaxOptions = checkboxField.maxOptions > 0 && checkboxField.options.length >= checkboxField.maxOptions;
-  
-  return (
-    <div className="space-y-2 mt-2">
-      {checkboxField.options.map((option) => (
-        <div key={option.id} className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={option.checked}
-            onChange={() => {
-              const newOptions = checkboxField.options.map(opt =>
-                opt.id === option.id ? { ...opt, checked: !opt.checked } : opt
-              );
-              updateFieldSettings(field.id, { options: newOptions });
-            }}
-            className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
-          />
-          <Input
-            value={option.label}
-            onChange={(e) => {
-              const newOptions = checkboxField.options.map(opt =>
-                opt.id === option.id ? { ...opt, label: e.target.value } : opt
-              );
-              updateFieldSettings(field.id, { options: newOptions });
-            }}
-            className="bg-purple-800/50 border-purple-600 text-purple-100"
-            placeholder="Option label"
-          />
-          {(checkboxField.options.length > 1) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const newOptions = checkboxField.options.filter(opt => opt.id !== option.id);
-                updateFieldSettings(field.id, { options: newOptions });
-              }}
-              className="text-purple-100 hover:text-white hover:bg-purple-800"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      ))}
-      
-      {/* Only show Add Option button if max options haven't been reached */}
-      {!reachedMaxOptions && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            const newOptions = [
-              ...checkboxField.options,
-              { id: Date.now(), label: "", checked: false }
-            ];
-            updateFieldSettings(field.id, { options: newOptions });
-          }}
-          className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Option
-        </Button>
-      )}
-      
-      {/* Display a message if max options are reached */}
-      {reachedMaxOptions && (
-        <p className="text-purple-400 text-xs mt-1 italic">
-          Maximum number of options reached ({checkboxField.maxOptions})
-        </p>
-      )}
-    </div>
-  );
-})()}
-  
-                                {/* List field rendering */}
-                                {field.type === FIELD_TYPES.LIST && (
-                                  <div className="space-y-2 mt-2">
-                                    {(field as ListField).values.map((value, index) => (
-                                      <div key={index} className="flex gap-2">
-                                        <Input
-                                          value={value}
-                                          onChange={(e) => {
-                                            const newValues = [...(field as ListField).values];
-                                            newValues[index] = e.target.value;
-                                            updateFieldSettings(field.id, {
-                                              values: newValues,
-                                            });
-                                          }}
-                                          className="bg-purple-800/50 border-purple-600 text-purple-100"
-                                          placeholder={field.placeholder}
-                                        />
-                                        {(field as ListField).values.length > 1 && (
+                                {field.type === FIELD_TYPES.RADIO &&
+                                  (() => {
+                                    // Create a properly typed variable once for this section
+                                    const radioField = field as RadioField;
+                                    const reachedMaxOptions =
+                                      radioField.maxOptions > 0 &&
+                                      radioField.options.length >=
+                                        radioField.maxOptions;
+
+                                    return (
+                                      <div className="space-y-2 mt-2">
+                                        {radioField.options.map((option) => (
+                                          <div
+                                            key={option.id}
+                                            className="flex items-center gap-2"
+                                          >
+                                            <input
+                                              type="radio"
+                                              checked={
+                                                radioField.selectedOption ===
+                                                option.id
+                                              }
+                                              onChange={() =>
+                                                updateFieldSettings(field.id, {
+                                                  selectedOption: option.id,
+                                                })
+                                              }
+                                              className="text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                                            />
+                                            <Input
+                                              value={option.label}
+                                              onChange={(e) => {
+                                                const newOptions =
+                                                  radioField.options.map(
+                                                    (opt) =>
+                                                      opt.id === option.id
+                                                        ? {
+                                                            ...opt,
+                                                            label:
+                                                              e.target.value,
+                                                          }
+                                                        : opt
+                                                  );
+                                                updateFieldSettings(field.id, {
+                                                  options: newOptions,
+                                                });
+                                              }}
+                                              className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                              placeholder="Option label"
+                                            />
+                                            {radioField.options.length > 2 && (
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => {
+                                                  const newOptions =
+                                                    radioField.options.filter(
+                                                      (opt) =>
+                                                        opt.id !== option.id
+                                                    );
+                                                  updateFieldSettings(
+                                                    field.id,
+                                                    { options: newOptions }
+                                                  );
+                                                }}
+                                                className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ))}
+
+                                        {/* Only show Add Option button if max options haven't been reached */}
+                                        {!reachedMaxOptions && (
                                           <Button
                                             type="button"
                                             variant="ghost"
-                                            size="icon"
+                                            size="sm"
                                             onClick={() => {
-                                              const newValues = (field as ListField).values.filter(
-                                                (_, i) => i !== index
-                                              );
+                                              const newOptions = [
+                                                ...radioField.options,
+                                                { id: Date.now(), label: "" },
+                                              ];
+                                              updateFieldSettings(field.id, {
+                                                options: newOptions,
+                                              });
+                                            }}
+                                            className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Add Option
+                                          </Button>
+                                        )}
+
+                                        {/* Display a message if max options are reached */}
+                                        {reachedMaxOptions && (
+                                          <p className="text-purple-400 text-xs mt-1 italic">
+                                            Maximum number of options reached (
+                                            {radioField.maxOptions})
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                {/* Checkbox field rendering */}
+                                {field.type === FIELD_TYPES.CHECKBOX &&
+                                  (() => {
+                                    // Create a properly typed variable once for this section
+                                    const checkboxField =
+                                      field as CheckboxField;
+                                    const reachedMaxOptions =
+                                      checkboxField.maxOptions > 0 &&
+                                      checkboxField.options.length >=
+                                        checkboxField.maxOptions;
+
+                                    return (
+                                      <div className="space-y-2 mt-2">
+                                        {checkboxField.options.map((option) => (
+                                          <div
+                                            key={option.id}
+                                            className="flex items-center gap-2"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={option.checked}
+                                              onChange={() => {
+                                                const newOptions =
+                                                  checkboxField.options.map(
+                                                    (opt) =>
+                                                      opt.id === option.id
+                                                        ? {
+                                                            ...opt,
+                                                            checked:
+                                                              !opt.checked,
+                                                          }
+                                                        : opt
+                                                  );
+                                                updateFieldSettings(field.id, {
+                                                  options: newOptions,
+                                                });
+                                              }}
+                                              className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                                            />
+                                            <Input
+                                              value={option.label}
+                                              onChange={(e) => {
+                                                const newOptions =
+                                                  checkboxField.options.map(
+                                                    (opt) =>
+                                                      opt.id === option.id
+                                                        ? {
+                                                            ...opt,
+                                                            label:
+                                                              e.target.value,
+                                                          }
+                                                        : opt
+                                                  );
+                                                updateFieldSettings(field.id, {
+                                                  options: newOptions,
+                                                });
+                                              }}
+                                              className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                              placeholder="Option label"
+                                            />
+                                            {checkboxField.options.length >
+                                              1 && (
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => {
+                                                  const newOptions =
+                                                    checkboxField.options.filter(
+                                                      (opt) =>
+                                                        opt.id !== option.id
+                                                    );
+                                                  updateFieldSettings(
+                                                    field.id,
+                                                    { options: newOptions }
+                                                  );
+                                                }}
+                                                className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ))}
+
+                                        {/* Only show Add Option button if max options haven't been reached */}
+                                        {!reachedMaxOptions && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              const newOptions = [
+                                                ...checkboxField.options,
+                                                {
+                                                  id: Date.now(),
+                                                  label: "",
+                                                  checked: false,
+                                                },
+                                              ];
+                                              updateFieldSettings(field.id, {
+                                                options: newOptions,
+                                              });
+                                            }}
+                                            className="text-purple-100 hover:text-white hover:bg-purple-800 w-full"
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Add Option
+                                          </Button>
+                                        )}
+
+                                        {/* Display a message if max options are reached */}
+                                        {reachedMaxOptions && (
+                                          <p className="text-purple-400 text-xs mt-1 italic">
+                                            Maximum number of options reached (
+                                            {checkboxField.maxOptions})
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                {/* List field rendering */}
+                                {field.type === FIELD_TYPES.LIST && (
+                                  <div className="space-y-2 mt-2">
+                                    {(field as ListField).values.map(
+                                      (value, index) => (
+                                        <div key={index} className="flex gap-2">
+                                          <Input
+                                            value={value}
+                                            onChange={(e) => {
+                                              const newValues = [
+                                                ...(field as ListField).values,
+                                              ];
+                                              newValues[index] = e.target.value;
                                               updateFieldSettings(field.id, {
                                                 values: newValues,
                                               });
                                             }}
-                                            className="text-purple-100 hover:text-white hover:bg-purple-800"
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    ))}
+                                            className="bg-purple-800/50 border-purple-600 text-purple-100"
+                                            placeholder={field.placeholder}
+                                          />
+                                          {(field as ListField).values.length >
+                                            1 && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => {
+                                                const newValues = (
+                                                  field as ListField
+                                                ).values.filter(
+                                                  (_, i) => i !== index
+                                                );
+                                                updateFieldSettings(field.id, {
+                                                  values: newValues,
+                                                });
+                                              }}
+                                              className="text-purple-100 hover:text-white hover:bg-purple-800"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )
+                                    )}
                                     {(!(field as ListField).maxEntries ||
-                                      (field as ListField).values.length < (field as ListField).maxEntries) && (
+                                      (field as ListField).values.length <
+                                        (field as ListField).maxEntries) && (
                                       <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          const newValues = [...(field as ListField).values, ""];
+                                          const newValues = [
+                                            ...(field as ListField).values,
+                                            "",
+                                          ];
                                           updateFieldSettings(field.id, {
                                             values: newValues,
                                           });
@@ -840,12 +922,14 @@ const handleSubmit = (e: React.FormEvent): void => {
                                   </div>
                                 )}
                               </div>
-  
+
                               {/* Inline settings panel */}
                               {selectedFieldId === field.id && (
                                 <div className="w-72 bg-purple-900/60 rounded-lg p-4 border border-purple-700/50">
-                                  <h4 className="text-lg font-medium text-purple-100 mb-3">Field Settings</h4>
-                                  
+                                  <h4 className="text-lg font-medium text-purple-100 mb-3">
+                                    Field Settings
+                                  </h4>
+
                                   <div className="space-y-4">
                                     <div>
                                       <label className="block text-purple-100 mb-2">
@@ -862,7 +946,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                                         placeholder="Enter placeholder text"
                                       />
                                     </div>
-  
+
                                     {/* List-specific settings */}
                                     {field.type === FIELD_TYPES.LIST && (
                                       <>
@@ -873,10 +957,13 @@ const handleSubmit = (e: React.FormEvent): void => {
                                           <Input
                                             type="number"
                                             min="0"
-                                            value={(field as ListField).maxEntries}
+                                            value={
+                                              (field as ListField).maxEntries
+                                            }
                                             onChange={(e) =>
                                               updateFieldSettings(field.id, {
-                                                maxEntries: parseInt(e.target.value) || 0,
+                                                maxEntries:
+                                                  parseInt(e.target.value) || 0,
                                               })
                                             }
                                             className="bg-purple-800/50 border-purple-600 text-purple-100"
@@ -886,16 +973,20 @@ const handleSubmit = (e: React.FormEvent): void => {
                                             Set to 0 for unlimited entries.
                                           </p>
                                         </div>
-  
+
                                         <div>
                                           <div className="flex items-center gap-2">
                                             <input
                                               type="checkbox"
                                               id={`allowUserAdd-${field.id}`}
-                                              checked={(field as ListField).allowUserAdd}
+                                              checked={
+                                                (field as ListField)
+                                                  .allowUserAdd
+                                              }
                                               onChange={(e) =>
                                                 updateFieldSettings(field.id, {
-                                                  allowUserAdd: e.target.checked,
+                                                  allowUserAdd:
+                                                    e.target.checked,
                                                 })
                                               }
                                               className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
@@ -910,11 +1001,13 @@ const handleSubmit = (e: React.FormEvent): void => {
                                         </div>
                                       </>
                                     )}
-  
+
                                     {/* Field options component */}
-                                    <FieldOptions 
-                                      field={field} 
-                                      onUpdate={(updates) => updateFieldSettings(field.id, updates)} 
+                                    <FieldOptions
+                                      field={field}
+                                      onUpdate={(updates) =>
+                                        updateFieldSettings(field.id, updates)
+                                      }
                                     />
                                   </div>
                                 </div>
@@ -925,7 +1018,7 @@ const handleSubmit = (e: React.FormEvent): void => {
                       ))}
                     </div>
                   )}
-  
+
                   {/* Submit Button */}
                   <div className="flex justify-end">
                     <Button

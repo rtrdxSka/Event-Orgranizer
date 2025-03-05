@@ -188,9 +188,41 @@ export const eventDatesSchema = z.object({
     "At least one event date must have a value"
   ),
   maxDates: z.number().min(0, "Max dates cannot be negative"),
+  allowUserAdd: z.boolean().default(true) // Default to allowing users to add dates
 });
 
 export type EventDatesSchema = z.infer<typeof eventDatesSchema>;
+
+export const validateEventDates = (eventDates: EventDatesSchema): string | true => {
+  const nonEmptyDates = eventDates.dates.filter(date => date.trim() !== '');
+  
+  if (nonEmptyDates.length === 0) {
+    return "At least one event date must be provided";
+  }
+  
+  const hasEmptyField = eventDates.dates.some(date => date.trim() === '');
+  const hasRoomForMore = eventDates.maxDates === 0 || eventDates.dates.length < eventDates.maxDates;
+  
+  // Check if users can add dates
+  if (!eventDates.allowUserAdd) {
+    // If users can't add dates, we must provide an empty field for them
+    if (!hasEmptyField) {
+      return "Must include an empty date field for user input since users cannot add their own dates";
+    }
+  } else {
+    // If users can add dates, either need an empty field or room for more
+    if (!hasEmptyField && !hasRoomForMore) {
+      return "Must either have an empty date field or room for more dates";
+    }
+  }
+  
+  // Additional validation for max dates
+  if (eventDates.maxDates > 0 && eventDates.dates.length > eventDates.maxDates) {
+    return `Number of dates (${eventDates.dates.length}) exceeds maximum allowed (${eventDates.maxDates})`;
+  }
+  
+  return true;
+};
 
 // Main event form schema
 export const eventFormSchema = z.object({
@@ -205,13 +237,13 @@ export type EventFormSchema = z.infer<typeof eventFormSchema>;
 
 // Validate the entire form
 export const validateForm = (data: EventFormSchema): string | true => {
-  // First validate event dates
-  const validDates = data.eventDates.dates.filter(date => date.trim() !== '');
-  if (validDates.length === 0) {
-    return "At least one event date must be provided";
+  // Validate event dates
+  const dateValidation = validateEventDates(data.eventDates);
+  if (dateValidation !== true) {
+    return `Event Dates: ${dateValidation}`;
   }
   
-  // Validate each field
+  // Validate each field (existing logic unchanged)
   for (const field of data.formFields) {
     if (field.type === "text") {
       const result = validateTextField(field);
