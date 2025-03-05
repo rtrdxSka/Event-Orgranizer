@@ -1,9 +1,9 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MapPin } from "lucide-react";
 import MultiDateField from "@/components/MultiDateField";
 import { EventFormData } from "@/types";
+import MultiPlaceField from "./MultiPlaceField";
 
 interface EventFormFieldsProps {
   formData: EventFormData;
@@ -11,8 +11,9 @@ interface EventFormFieldsProps {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => void;
   handleDateChange: (dates: string[]) => void;
-  handleAllowUserAddChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleMaxDatesChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleAllowUserAddChange: (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleMaxValuesChange: (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handlePlaceChange: (places: string[]) => void;
 }
 
 const EventFormFields = ({
@@ -20,7 +21,8 @@ const EventFormFields = ({
   handleInputChange,
   handleDateChange,
   handleAllowUserAddChange,
-  handleMaxDatesChange,
+  handleMaxValuesChange,
+  handlePlaceChange,
 }: EventFormFieldsProps) => {
   return (
     <div className="space-y-6 mb-8">
@@ -58,7 +60,7 @@ const EventFormFields = ({
               type="number"
               min="0"
               value={formData.eventDates.maxDates}
-              onChange={handleMaxDatesChange}
+              onChange={handleMaxValuesChange("eventDates")}
               className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
               placeholder="0 for unlimited"
             />
@@ -76,7 +78,7 @@ const EventFormFields = ({
             type="checkbox"
             id="allowUserAddDates"
             checked={formData.eventDates.allowUserAdd}
-            onChange={handleAllowUserAddChange}
+            onChange={handleAllowUserAddChange("eventDates")}
             className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
           />
           <label htmlFor="allowUserAddDates" className="text-purple-200">
@@ -96,17 +98,49 @@ const EventFormFields = ({
       </div>
 
       <div>
-        <label className="block text-purple-100 mb-2">Place</label>
-        <div className="relative">
-          <Input
-            name="place"
-            value={formData.place}
-            onChange={handleInputChange}
-            className="bg-purple-800/50 border-purple-600 text-purple-100"
-            placeholder="Enter location"
-          />
-          <MapPin className="absolute right-3 top-2.5 h-5 w-5 text-purple-400" />
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-purple-100">Place</label>
+          <div className="flex items-center gap-2">
+            <label className="text-purple-100 text-sm">Max Places:</label>
+            <Input
+              type="number"
+              min="0"
+              value={formData.place.maxPlaces}
+              onChange={handleMaxValuesChange("place")}
+              className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
+              placeholder="0 for unlimited"
+            />
+          </div>
         </div>
+
+        <MultiPlaceField
+          places={formData.place.places}
+          maxPlaces={formData.place.maxPlaces}
+          onChange={handlePlaceChange}
+        />
+
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="checkbox"
+            id="allowUserAddPlaces"
+            checked={formData.place.allowUserAdd}
+            onChange={handleAllowUserAddChange("place")}
+            className="rounded border-purple-600 bg-purple-800/50 text-purple-600 focus:ring-purple-500"
+          />
+          <label htmlFor="allowUserAddPlaces" className="text-purple-200">
+            Allow users to add places
+          </label>
+        </div>
+
+        <p className="text-purple-400 text-sm mt-1">
+          {formData.place.maxPlaces === 0
+            ? formData.place.allowUserAdd
+              ? "Users can suggest unlimited places"
+              : "Fixed places only (users cannot add places)"
+            : formData.place.allowUserAdd
+            ? `Users can suggest up to ${formData.place.maxPlaces} places`
+            : `Fixed places only (limit: ${formData.place.maxPlaces})`}
+        </p>
       </div>
     </div>
   );
