@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { User } from "@/types";
+import { CreateEventPayload, EventResponse, User } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -55,19 +55,7 @@ export const deleteSessions = async (id:string) => {
 
 
 // api/event.ts
-export const createEvent = async (data: CreateEventInput) => {
-  // Validate the data
-  const validatedData = createEventValidationSchema.parse(data);
-  
-  // Prepare the data for API
-  const apiData = {
-    ...validatedData,
-    eventDate: validatedData.eventDate ? new Date(validatedData.eventDate).toISOString() : undefined,
-  };
-  
-  // Make the API call
-  const response = await API.post('/event/create', apiData);
-  
-  // Return the data directly as it comes from the API
-  return response;
+// /event/create
+export const createEvent = async (eventData: CreateEventPayload): Promise<EventResponse> => {
+  return API.post('/event/create', eventData);
 };

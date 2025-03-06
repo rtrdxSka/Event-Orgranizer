@@ -22,6 +22,7 @@ import EventFormFields from "@/components/EventComponents/EventFormFields";
 import CustomFieldsList from "@/components/EventComponents/CustomFieldsList";
 import DraggableField from "@/components/EventComponents/DraggebleField";
 import { toast } from "sonner";
+import { createEvent } from "@/lib/api";
 
 const CreateEventForm = () => {
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
@@ -209,7 +210,7 @@ const CreateEventForm = () => {
   };
 
   // Form submission
-  const handleSubmit = (e: React.FormEvent): void => {
+  const handleSubmit = async  (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
     try {
@@ -385,6 +386,8 @@ const CreateEventForm = () => {
 
       // Submit the form
       console.log("Event Data:", eventData);
+      const response = await createEvent(eventData);
+      console.log(response);
       toast.custom(() => (
         <div className="bg-white text-green-800 font-medium p-4 rounded-md shadow-lg border-l-4 border-green-600">
           <div className="flex items-start gap-2">

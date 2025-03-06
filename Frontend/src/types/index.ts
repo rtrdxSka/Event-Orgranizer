@@ -116,3 +116,61 @@ export const initialFormData: EventFormData = {
     allowUserAdd: true,
   },
 };
+
+// Define a type for the event creation payload
+export type CreateEventPayload = {
+  name: string;
+  description: string;
+  customFields: Record<string, any>;
+  eventDates: {
+    dates: string[];
+    maxDates: number;
+    allowUserAdd: boolean;
+  };
+  eventPlaces: {
+    places: string[];
+    maxPlaces: number;
+    allowUserAdd: boolean;
+  };
+  votingCategories: Array<{
+    categoryName: string;
+    options: Array<{
+      optionName: string;
+      votes: any[];
+    }>;
+  }>;
+};
+
+// Define a type for the event response
+export type EventResponse = {
+  status: string;
+  data: {
+    event: {
+      _id: string;
+      name: string;
+      description: string;
+      eventCode: string;
+      customFields: Record<string, any>;
+      eventDates: {
+        dates: string[];
+        maxDates: number;
+        allowUserAdd: boolean;
+      };
+      eventPlaces: {
+        places: string[];
+        maxPlaces: number;
+        allowUserAdd: boolean;
+      };
+      votingCategories: Array<{
+        categoryName: string;
+        options: Array<{
+          optionName: string;
+          votes: string[];
+        }>;
+      }>;
+      createdBy: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  };
+};
