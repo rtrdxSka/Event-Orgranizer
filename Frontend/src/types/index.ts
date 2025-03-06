@@ -149,7 +149,6 @@ export type EventResponse = {
       _id: string;
       name: string;
       description: string;
-      eventCode: string;
       customFields: Record<string, any>;
       eventDates: {
         dates: string[];

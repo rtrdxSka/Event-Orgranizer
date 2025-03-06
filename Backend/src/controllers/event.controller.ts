@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
 import { createEvent } from "../services/event.service";
-import { createEventSchema } from "./event.schemas";
+
 
 export const createEventHandler = catchErrors(async (req: Request, res: Response) => {
   // The user ID will come from the authenticated session
@@ -23,16 +23,3 @@ export const createEventHandler = catchErrors(async (req: Request, res: Response
   });
 });
 
-// Example of how this would be called:
-/*
-POST /api/events
-{
-  "name": "Board Game Night",
-  "description": "Monthly gaming session",
-  "customFields": {
-    "boardGame": "Catan",
-    "playerLimit": 6,
-    "location": "John's house"
-  }
-}
-*/

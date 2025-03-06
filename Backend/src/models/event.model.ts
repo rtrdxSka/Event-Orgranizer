@@ -52,7 +52,6 @@ const eventSchema = new mongoose.Schema<EventDocument>({
     type: String,
     required: true,
     unique: true,
-    uppercase: true,
     index: true,
     default: () => uuidv4()
     // Don't set a default here, we'll set it in the pre-save middleware
@@ -105,40 +104,6 @@ const eventSchema = new mongoose.Schema<EventDocument>({
   timestamps: true
 });
 
-// eventSchema.methods.addVote = async function(
-//   this: EventDocument,
-//   categoryName: string,
-//   optionName: string,
-//   userId: mongoose.Types.ObjectId
-// ): Promise<void> {
-//   const category = this.votingCategories.find(c => c.categoryName === categoryName);
-//   if (!category) throw new Error('Category not found');
-
-//   const option = category.options.find(o => o.optionName === optionName);
-//   if (!option) throw new Error('Option not found');
-
-//   category.options.forEach(o => {
-//     o.votes = o.votes.filter(v => !v.equals(userId));
-//   });
-
-//   if (!option.votes.some(v => v.equals(userId))) {
-//     option.votes.push(userId);
-//   }
-
-//   await this.save();
-// };
-
-// eventSchema.post('save', async function(doc) {
-//   if (!doc.eventLink) {
-//     // Only set the eventLink if it's not already set
-//     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-//     doc.eventLink = `${baseUrl}/event/submit/${doc.eventUUID}`;
-    
-//     // Save the document again to update the eventLink
-//     // But don't run this hook again for this save operation to avoid infinite loop
-//     await doc.save({ validateBeforeSave: false });
-//   }
-// });
 
 
 const EventModel = mongoose.model<EventDocument>("Event", eventSchema);
