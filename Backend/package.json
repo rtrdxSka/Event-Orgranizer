@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev":"ts-node-dev --files src/index.ts index.d.ts",
+    "dev": "ts-node-dev --files src/index.ts index.d.ts",
     "build": "tsc && copy package.json dist\\",
     "start": "node dist/index.js"
   },
@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.4",
     "resend": "^4.0.1",
+    "uuid": "^11.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -29,6 +30,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
+    "@types/uuid": "^10.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.3"
   }
