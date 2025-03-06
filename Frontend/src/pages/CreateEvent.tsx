@@ -262,6 +262,17 @@ const CreateEventForm = () => {
         votes: [],
       }));
 
+      const votingCategories = [
+        {
+          categoryName: "date",
+          options: dateOptions,
+        },
+        {
+          categoryName: "place",
+          options: placeOptions,
+        }
+      ];
+
       // Create a properly structured customFields object
       const customFields: Record<string, any> = {};
       
@@ -312,6 +323,15 @@ const CreateEventForm = () => {
             
             // Add optional property (derived from !required)
             fieldData.optional = !radioField.required;
+
+            votingCategories.push({
+              categoryName: field.title,
+              options: fieldData.options.map(option => ({
+                optionName: option.label,
+                votes: [],
+              }))
+            });
+
             break;
           }
           
@@ -328,6 +348,15 @@ const CreateEventForm = () => {
             
             // Add optional property (derived from !required)
             fieldData.optional = !checkboxField.required;
+
+            votingCategories.push({
+              categoryName: field.title,
+              options: fieldData.options.map(option => ({
+                optionName: option.label,
+                votes: [],
+              }))
+            });
+            
             break;
           }
         }
@@ -351,16 +380,7 @@ const CreateEventForm = () => {
           maxPlaces: formData.place.maxPlaces,
           allowUserAdd: formData.place.allowUserAdd,
         },
-        votingCategories: [
-          {
-            categoryName: "date",
-            options: dateOptions,
-          },
-          {
-            categoryName: "place",
-            options: placeOptions,
-          }
-        ],
+        votingCategories
       };
 
       // Submit the form
@@ -411,7 +431,7 @@ const CreateEventForm = () => {
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-12 gap-8">
                 {/* Draggable Fields Sidebar */}
-                <div className="col-span-2 bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit">
+                <div className="col-span-2 bg-purple-900/40 rounded-xl p-6 border border-purple-700/50 h-fit sticky top-24">
                   <h2 className="text-xl font-semibold text-purple-100 mb-4">
                     Form Fields
                   </h2>
@@ -440,11 +460,20 @@ const CreateEventForm = () => {
                   />
 
                   {/* Custom Fields Drop Zone */}
-                  <div className="mb-8">
+                  <div className="mb-8" id="drop-zone-section">
                     <h2 className="text-xl font-semibold text-purple-100 mb-4">
                       Custom Fields
                     </h2>
-                    <FormFieldDropZone onDrop={handleFieldDrop} />
+                    <FormFieldDropZone onDrop={(fieldType) => {
+                      handleFieldDrop(fieldType);
+                      // Scroll to the bottom of the custom fields list after dropping
+                      setTimeout(() => {
+                        window.scrollTo({
+                          top: document.documentElement.scrollHeight,
+                          behavior: "smooth"
+                        });
+                      }, 100);
+                    }} />
                   </div>
 
                   {/* Added Fields Display */}
