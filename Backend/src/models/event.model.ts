@@ -15,6 +15,7 @@ interface EventDates {
   allowUserAdd: boolean;
   dates: string[];
   maxDates: number;
+  maxVotes: number;
 }
 
 interface EventPlaces {
@@ -83,12 +84,14 @@ const eventSchema = new mongoose.Schema<EventDocument>({
   eventDates: {
     allowUserAdd: { type: Boolean, default: true },
     dates: { type: [String], default: [] },
-    maxDates: { type: Number, default: 0 }
+    maxDates: { type: Number, default: 0 },
+    maxVotes: { type: Number, default: 1 }
   },
   eventPlaces: {
     allowUserAdd: { type: Boolean, default: true },
     places: { type: [String], default: [] },
-    maxPlaces: { type: Number, default: 0 }
+    maxPlaces: { type: Number, default: 0 },
+    maxVotes: { type: Number, default: 1 }
   },
   votingCategories: {
     type: [{

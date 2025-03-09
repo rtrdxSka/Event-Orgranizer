@@ -15,14 +15,16 @@ const votingCategorySchema = z.object({
 const eventDatesSchema = z.object({
   dates: z.array(z.string()),
   maxDates: z.number().min(0),
-  allowUserAdd: z.boolean()
+  allowUserAdd: z.boolean(),
+  maxVotes: z.number().min(1)
 });
 
 // Schema for event places
 const eventPlacesSchema = z.object({
   places: z.array(z.string()),
   maxPlaces: z.number().min(0).optional(),
-  allowUserAdd: z.boolean()
+  allowUserAdd: z.boolean(),
+  maxVotes: z.number().min(1)
 });
 
 // Schema for base field properties in customFields

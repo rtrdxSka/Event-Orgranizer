@@ -4,7 +4,6 @@ import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED } from "../constants/h
 import EventModel from "../models/event.model";
 import UserModel from "../models/user.model";
 import appAssert from "../utils/appAssert";
-import { v4 as uuidv4 } from 'uuid';
 import { CreateEventInput, createEventSchema } from "../controllers/event.schemas";
 
 /**
@@ -149,11 +148,13 @@ export const createEvent = async (data: CreateEventInput) => {
         dates: filteredDates,
         maxDates: data.eventDates.maxDates,
         allowUserAdd: data.eventDates.allowUserAdd,
+        maxVotes: data.eventDates.maxVotes
       },
       eventPlaces: {
         places: filteredPlaces,
         maxPlaces: data.eventPlaces.maxPlaces || 0,
         allowUserAdd: data.eventPlaces.allowUserAdd,
+        maxVotes: data.eventPlaces.maxVotes
       },
       votingCategories
     });
