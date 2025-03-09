@@ -189,7 +189,8 @@ export const eventDatesSchema = z.object({
     "At least one event date must have a value"
   ),
   maxDates: z.number().min(0, "Max dates cannot be negative"),
-  allowUserAdd: z.boolean().default(true) // Default to allowing users to add dates
+  allowUserAdd: z.boolean().default(true), // Default to allowing users to add dates
+  maxVotes: z.number().min(1, "Max votes must be at least 1")
 });
 
 export type EventDatesSchema = z.infer<typeof eventDatesSchema>;
@@ -231,7 +232,8 @@ export const eventPlaceSchema = z.object({
     "At least one event date must have a value"
   ),
   maxPlaces: z.number().min(0, "Max dates cannot be negative"),
-  allowUserAdd: z.boolean().default(true) // Default to allowing users to add dates
+  allowUserAdd: z.boolean().default(true), // Default to allowing users to add dates
+  maxVotes: z.number().min(1, "Max votes must be at least 1")
 });
 
 export type EventPlaceSchema = z.infer<typeof eventPlaceSchema>;

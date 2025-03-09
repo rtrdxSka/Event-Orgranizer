@@ -86,41 +86,57 @@ const CreateEventForm = () => {
     e: React.ChangeEvent<HTMLInputElement>
   ): void => {
     const maxValue = parseInt(e.target.value) || 0;
+
+    
     
     if (fieldName === "eventDates") {
-      setFormData((prev) => {
-        const currentDates = [...prev.eventDates.dates];
-        const newDates =
-          maxValue > 0 && currentDates.length > maxValue
-            ? currentDates.slice(0, maxValue)
-            : currentDates;
+       // Handle which property to update based on the input name
+    const isMaxVotes = e.target.name === "maxVotes";
+    const propertyName = isMaxVotes ? "maxVotes" : "maxDates";
+    
+    // Ensure maxVotes is at least 1
+    const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
+    
+    setFormData((prev) => {
+      // Only adjust dates if we're changing maxDates
+      let newDates = [...prev.eventDates.dates];
+      if (!isMaxVotes && validValue > 0 && newDates.length > validValue) {
+        newDates = newDates.slice(0, validValue);
+      }
 
-        return {
-          ...prev,
-          eventDates: {
-            ...prev.eventDates,
-            maxDates: maxValue,
-            dates: newDates,
-          },
-        };
-      });
+      return {
+        ...prev,
+        eventDates: {
+          ...prev.eventDates,
+          [propertyName]: validValue,
+          dates: isMaxVotes ? prev.eventDates.dates : newDates,
+        },
+      };
+    });
     } else if (fieldName === "place") {
-      setFormData((prev) => {
-        const currentPlaces = [...prev.place.places];
-        const newPlaces =
-          maxValue > 0 && currentPlaces.length > maxValue
-            ? currentPlaces.slice(0, maxValue)
-            : currentPlaces;
+      // Handle which property to update based on the input name
+    const isMaxVotes = e.target.name === "maxVotes";
+    const propertyName = isMaxVotes ? "maxVotes" : "maxPlaces";
+    
+    // Ensure maxVotes is at least 1
+    const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
+    
+    setFormData((prev) => {
+      // Only adjust places if we're changing maxPlaces
+      let newPlaces = [...prev.place.places];
+      if (!isMaxVotes && validValue > 0 && newPlaces.length > validValue) {
+        newPlaces = newPlaces.slice(0, validValue);
+      }
 
-        return {
-          ...prev,
-          place: {
-            ...prev.place,
-            maxPlaces: maxValue,
-            places: newPlaces,
-          },
-        };
-      });
+      return {
+        ...prev,
+        place: {
+          ...prev.place,
+          [propertyName]: validValue,
+          places: isMaxVotes ? prev.place.places : newPlaces,
+        },
+      };
+    });
     }
   };
 
@@ -221,11 +237,13 @@ const CreateEventForm = () => {
           dates: formData.eventDates.dates,
           maxDates: formData.eventDates.maxDates,
           allowUserAdd: formData.eventDates.allowUserAdd,
+          maxVotes: formData.eventDates.maxVotes,
         },
         place: {
           places: formData.place.places,
           maxPlaces: formData.place.maxPlaces,
           allowUserAdd: formData.place.allowUserAdd,
+          maxVotes: formData.place.maxVotes,
         },
         formFields: formFields,
       };
@@ -375,11 +393,13 @@ const CreateEventForm = () => {
           dates: validDates.map((date) => new Date(date).toISOString()),
           maxDates: formData.eventDates.maxDates,
           allowUserAdd: formData.eventDates.allowUserAdd,
+          maxVotes: formData.eventDates.maxVotes,
         },
         eventPlaces: {
           places: validPlaces,
           maxPlaces: formData.place.maxPlaces,
           allowUserAdd: formData.place.allowUserAdd,
+          maxVotes: formData.place.maxVotes,
         },
         votingCategories
       };

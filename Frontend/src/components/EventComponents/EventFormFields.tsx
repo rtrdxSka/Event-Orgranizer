@@ -11,8 +11,12 @@ interface EventFormFieldsProps {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => void;
   handleDateChange: (dates: string[]) => void;
-  handleAllowUserAddChange: (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleMaxValuesChange: (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleAllowUserAddChange: (
+    fieldName: string
+  ) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleMaxValuesChange: (
+    fieldName: string
+  ) => (e: React.ChangeEvent<HTMLInputElement>) => void;
   handlePlaceChange: (places: string[]) => void;
 }
 
@@ -64,6 +68,16 @@ const EventFormFields = ({
               className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
               placeholder="0 for unlimited"
             />
+            <label className="text-purple-100 text-sm ml-2">Max Votes:</label>
+            <Input
+              type="number"
+              min="1"
+              name="maxVotes" // Add name attribute
+              value={formData.eventDates.maxVotes}
+              onChange={handleMaxValuesChange("eventDates")}
+              className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
+              placeholder="1"
+            />
           </div>
         </div>
 
@@ -109,6 +123,16 @@ const EventFormFields = ({
               onChange={handleMaxValuesChange("place")}
               className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
               placeholder="0 for unlimited"
+            />
+            <label className="text-purple-100 text-sm ml-2">Max Votes:</label>
+            <Input
+              type="number"
+              min="1"
+              name="maxVotes"
+              value={formData.place.maxVotes}
+              onChange={handleMaxValuesChange("place")}
+              className="bg-purple-800/50 border-purple-600 text-purple-100 w-24 h-8 text-sm"
+              placeholder="1"
             />
           </div>
         </div>

@@ -94,11 +94,13 @@ export interface EventFormData {
     dates: string[];
     maxDates: number;
     allowUserAdd: boolean;
+    maxVotes: number;
   };
   place: {
     places: string[];
     maxPlaces: number;
     allowUserAdd: boolean;
+    maxVotes: number;
   };
 }
 
@@ -109,11 +111,13 @@ export const initialFormData: EventFormData = {
     dates: [""],
     maxDates: 0,
     allowUserAdd: true,
+    maxVotes: 1
   },
   place: {
     places: [""],
     maxPlaces: 0,
     allowUserAdd: true,
+    maxVotes: 1
   },
 };
 
