@@ -35,10 +35,5 @@ export const getEventByUUIDHandler = catchErrors(async (req, res) => {
   // Get the event from the service
   const { event } = await getEventByUUID(eventUUID);
 
-  return res.status(OK).json({
-    status: "success",
-    data: {
-      event
-    }
-  });
+  return res.status(OK).json({event});
 });
