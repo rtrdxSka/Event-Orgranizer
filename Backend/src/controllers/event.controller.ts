@@ -33,7 +33,7 @@ export const getEventByUUIDHandler = catchErrors(async (req, res) => {
   appAssert(eventUUID, BAD_REQUEST, "Event UUID is required");
   
   // Get the event from the service
-  const { event } = await getEventByUUID(eventUUID);
+  const event = await getEventByUUID(eventUUID);
 
-  return res.status(OK).json({event});
+  return res.status(OK).json(event);
 });

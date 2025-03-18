@@ -188,7 +188,6 @@ export const getEventByUUID = async (eventUUID: string) => {
     "Event not found"
   );
 
-  return {
-    event
-  };
+  return event;
+
 };
