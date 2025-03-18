@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -61,6 +61,6 @@ export const createEvent = async (eventData: CreateEventPayload): Promise<EventR
 };
 
 
-export const getEvent = async (eventUUID: string): Promise<EventResponse> => {
+export const getEvent = async (eventUUID: string): Promise<EventGet> => {
   return API.get(`/event/submit/${eventUUID}`);
 }

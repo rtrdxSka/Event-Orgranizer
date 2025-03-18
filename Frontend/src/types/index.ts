@@ -177,3 +177,38 @@ export type EventResponse = {
     };
   };
 };
+
+export interface EventGet {
+  _id: string;
+  name: string;
+  description: string;
+  eventUUID: string;
+  createdBy: string;
+  createdAt: string;
+  eventDate: string | null;
+  place: string | null;
+  eventDates?: {
+    dates: string[];
+    maxDates: number;
+    allowUserAdd: boolean;
+    maxVotes: number;
+  };
+  eventPlaces?: {
+    places: string[];
+    maxPlaces: number;
+    allowUserAdd: boolean;
+    maxVotes: number;
+  };
+  customFields?: Record<string, any>;
+  votingCategories?: Array<{
+    categoryName: string;
+    options: Array<{
+      optionName: string;
+      votes: string[];
+      _id: string;
+    }>;
+    _id: string;
+  }>;
+  updatedAt: string;
+  __v: number;
+}
