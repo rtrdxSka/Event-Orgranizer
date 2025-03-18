@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED } from "../constants/http";
+import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND } from "../constants/http";
 
 import EventModel from "../models/event.model";
 import UserModel from "../models/user.model";
@@ -177,3 +177,18 @@ export const createEvent = async (data: CreateEventInput) => {
     );
   }
 }
+
+
+export const getEventByUUID = async (eventUUID: string) => {
+  const event = await EventModel.findOne({ eventUUID });
+  
+  appAssert(
+    event,
+    NOT_FOUND,
+    "Event not found"
+  );
+
+  return {
+    event
+  };
+};
