@@ -59,3 +59,8 @@ export const deleteSessions = async (id:string) => {
 export const createEvent = async (eventData: CreateEventPayload): Promise<EventResponse> => {
   return API.post('/event/create', eventData);
 };
+
+
+export const getEvent = async (eventUUID: string): Promise<EventResponse> => {
+  return API.get(`/event/submit/${eventUUID}`);
+}

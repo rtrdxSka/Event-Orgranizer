@@ -11,6 +11,7 @@ import { GuestRoute } from "./components/GuesRoute"
 import Profile from "./pages/Profile"
 import { setNavigate } from "./lib/navigation"
 import CreateEvent from "./pages/CreateEvent"
+import EventSubmit from "./pages/EventSubmit"
 
 
 function App() {
@@ -39,6 +40,17 @@ function App() {
           </ProtectedRoute>
         } 
       />
+
+        <Route 
+        path="/event/submit/:eventUUID" 
+        element={
+          <ProtectedRoute>
+            <EventSubmit />
+          </ProtectedRoute>
+        } 
+      />
+
+
 
       {/* Guest Routes */}
       <Route 
