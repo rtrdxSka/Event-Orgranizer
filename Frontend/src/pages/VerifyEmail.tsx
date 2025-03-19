@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import Navbar from '@/components/Navbar';
+import Navbar from '@/components/NavBar';
 import anime from 'animejs/lib/anime.es.js';
 import { useEffect } from "react";
+import { ApiError } from "@/types";
 
 const VerifyEmail = () => {
   const { code } = useParams();
@@ -24,12 +25,15 @@ const VerifyEmail = () => {
       easing: 'easeOutExpo'
     });
 
-    if (isSuccess) {
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-    }
+
   }, [isPending, isError, isSuccess, navigate]);
+
+  const getErrorMessage = (error: unknown): string => {
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      return (error as ApiError).message;
+    }
+    return 'An error occurred during verification';
+  };
 
   return (
     <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
@@ -78,7 +82,7 @@ const VerifyEmail = () => {
                 Verification Failed
               </h2>
               <p className="text-red-300 mb-8">
-                {(error as any)?.message || 'An error occurred during verification'}
+              {getErrorMessage(error)}
               </p>
               <Button
                 onClick={() => navigate('/password/reset')}

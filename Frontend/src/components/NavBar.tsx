@@ -40,6 +40,15 @@ const Navbar = () => {
           <Button
             variant="ghost"
             size="sm"
+            className="text-purple-100 hover:text-white hover:bg-purple-800 mr-2"
+            onClick={() => navigate('/event/create')}
+          >
+            Create Event
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             className="text-purple-100 hover:text-white hover:bg-purple-800"
             onClick={() => navigate('/profile')}
           >

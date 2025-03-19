@@ -21,7 +21,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 import anime from 'animejs/lib/anime.es.js';
-import Navbar from '@/components/Navbar';
+import Navbar from '@/components/NavBar';
 import { useMutation } from '@tanstack/react-query';
 import { login } from '@/lib/api';
 import { useForm } from "react-hook-form"
@@ -62,7 +62,7 @@ const Login = () => {
     },
   });
 
-  const { mutate: loginMutation, isLoading } = useMutation({
+  const { mutate: loginMutation, isPending } = useMutation({
     mutationFn: login,
     onSuccess: () => {
       setErrorMessage("");
@@ -240,9 +240,9 @@ const Login = () => {
                   <Button 
                     type="submit"
                     className="w-full bg-gradient-to-r from-purple-400 to-blue-400 hover:from-purple-500 hover:to-blue-500 text-purple-950 font-semibold mt-2"
-                    disabled={isLoading}
+                    disabled={isPending}
                   >
-                    {isLoading ? "Signing in..." : "Sign In"}
+                    {isPending ? "Signing in..." : "Sign In"}
                   </Button>
                 </CardContent>
               </form>

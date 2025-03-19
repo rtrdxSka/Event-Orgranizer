@@ -1,4 +1,5 @@
 import API from "@/config/apiClient";
+import { CreateEventPayload, EventResponse, User, EventGet } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -36,7 +37,7 @@ export const resetPassword = async ({verificationCode, password}:ResetPasswordPa
   return API.post("/auth/password/reset", { verificationCode, password });  
 }
 
-export const getUser = async () => {
+export const getUser = async (): Promise<User> => {
   return API.get("/user");
 };
 
@@ -50,4 +51,16 @@ export const getSessions = async () => {
 
 export const deleteSessions = async (id:string) => {
   API.delete(`/sessions/${id}`);
+}
+
+
+// api/event.ts
+// /event/create
+export const createEvent = async (eventData: CreateEventPayload): Promise<EventResponse> => {
+  return API.post('/event/create', eventData);
+};
+
+
+export const getEvent = async (eventUUID: string): Promise<EventGet> => {
+  return API.get(`/event/submit/${eventUUID}`);
 }

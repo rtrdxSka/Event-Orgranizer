@@ -1,16 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Navbar from '@/components/NavBar';
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, MessageSquare, MapPin, Menu, X, Check, Clock, Bell } from 'lucide-react';
+import { Calendar, Users, MessageSquare, MapPin, Check, Clock, Bell } from 'lucide-react';
 import anime from 'animejs/lib/anime.es.js';
 import { Link, useNavigate  } from 'react-router-dom';
-import Navbar from '@/components/Navbar';
+
+interface VisibilityState {
+  features?: boolean;
+  howItWorks?: boolean;
+  cta?: boolean;
+  [key: string]: boolean | undefined; // This allows for dynamic keys
+}
 
 const Home = () => {
   const navigate = useNavigate();
   const [currentWord, setCurrentWord] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false)
   const alternateWords = ['Hangouts', 'Meetings', 'Reunions', 'Events', 'Meetups', 'Celebrations'];
-  const [isVisible, setIsVisible] = useState({});
+  const [isVisible, setIsVisible] = useState<VisibilityState>({});
   const [orbPositions] = useState(
     [...Array(8)].map(() => ({
       top: `${Math.random() * 100}%`,
@@ -19,14 +26,14 @@ const Home = () => {
   );
   
 
-  const titleRef = useRef(null);
-  const subtitleRef = useRef(null);
-  const buttonRef = useRef(null);
-  const featuresRef = useRef(null);
-  const howItWorksRef = useRef(null);
-  const ctaRef = useRef(null);
-  const wordRef = useRef(null);
-  const processLineRef = useRef(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const howItWorksRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const wordRef = useRef<HTMLSpanElement>(null);
+  const processLineRef = useRef<HTMLDivElement>(null);
 
   // Intersection Observer for scroll animations
   useEffect(() => {
@@ -233,6 +240,7 @@ const Home = () => {
                 size="lg" 
                 variant="secondary" 
                 className="bg-purple-200 text-purple-950 hover:bg-purple-100 font-semibold px-12 py-8 text-xl rounded-2xl"
+                onClick={() => navigate('/event/create')}
               >
                 Start Planning
               </Button>
