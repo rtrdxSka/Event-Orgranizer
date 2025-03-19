@@ -297,7 +297,7 @@ const CreateEventForm = () => {
       
       formFields.forEach(field => {
         // Use a unique key for each field (using title as the key)
-        const fieldKey = field.title || `field_${field.id}`;
+        const fieldKey = `field_${field.id}`;
         
         // Start with common properties for all field types
         const fieldData: Record<string, any> = {
