@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import CustomFieldRenderer from '@/components/EventSubmitComponents/CustomFields';
+
 
 // Define the form schema with Zod
 const eventSubmitSchema = z.object({
@@ -16,6 +18,7 @@ const eventSubmitSchema = z.object({
   newDate: z.string().optional(),
   selectedPlaces: z.array(z.string()),
   newPlace: z.string().optional(),
+  customFields: z.record(z.any()),
 });
 
 type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
@@ -42,6 +45,7 @@ const EventSubmit = () => {
       newDate: new Date().toISOString().split('T')[0] + 'T12:00',
       selectedPlaces: [],
       newPlace: '',
+      customFields: {},
     },
   });
 
@@ -175,7 +179,8 @@ const EventSubmit = () => {
       selectedDates: data.selectedDates,
       suggestedDates,
       selectedPlaces: data.selectedPlaces,
-      suggestedPlaces
+      suggestedPlaces,
+      customFields: data.customFields
     });
     alert("Your selections have been submitted.");
   };
@@ -331,6 +336,8 @@ const EventSubmit = () => {
                                         Vote
                                       </>
                                     )}
+                
+                
                                   </button>
                                 </div>
                               );
@@ -602,6 +609,37 @@ const EventSubmit = () => {
                   </div>
                 )}
               </div>
+
+              {/* Custom Fields Section */}
+              {event.customFields && Object.keys(event.customFields).length > 0 && (
+                  <div className="bg-purple-800/30 rounded-lg p-6">
+                    <div className="flex items-center mb-2">
+                      <AlignLeft className="h-5 w-5 text-purple-300 mr-2" />
+                      <h2 className="text-xl font-semibold text-purple-100">Additional Information</h2>
+                    </div>
+                    <div className="bg-purple-700/30 rounded-md p-4 border border-purple-600/50">
+                      <div className="space-y-6">
+                        {/* Render each custom field */}
+                        {Object.entries(event.customFields).map(([fieldKey, fieldData]) => (
+                          <CustomFieldRenderer 
+                            key={fieldKey}
+                            field={{
+                              ...fieldData,
+                              id: fieldKey
+                            }}
+                            formMethods={{
+                              control,
+                              watch,
+                              setValue,
+                              handleSubmit,
+                              formState: { errors }
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               
               {/* Submit button */}
               <div className="mt-8 flex justify-center">
