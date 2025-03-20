@@ -153,9 +153,10 @@ export const validateListField = (field: ListField): string | true => {
     // Check if users can add entries
     if (!field.allowUserAdd) {
       // If users can't add entries, we must provide an empty field
-      if (!hasEmptyField) {
-        return "Must include an empty field for user input since users cannot add their own entries";
-      }
+      // if (!hasEmptyField) {
+      //   return "Must include an empty field for user input since users cannot add their own entries";
+      // }
+      return "Non-readonly list fields must allow users to add entries"
     } else {
       // If users can add entries, either need an empty field or room for more
       if (!hasEmptyField && !hasRoomForMore) {
