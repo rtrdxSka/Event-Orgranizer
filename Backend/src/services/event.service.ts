@@ -94,6 +94,17 @@ export const createEvent = async (data: CreateEventInput) => {
               if (field.values.some(v => !v || v.trim() === "")) {
                 appAssert(false, BAD_REQUEST, `All entries in read-only list field "${field.title}" must have values`);
               }
+            } else{
+              const hasEmptyField = field.values.some(v => v.trim() === '');
+              const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
+              if (!field.allowUserAdd) {
+                appAssert(false, BAD_REQUEST, `List field "${field.title}" must allow users to add entries`);
+              }else{
+                
+                if (!hasEmptyField && !hasRoomForMore) {
+                  appAssert(false, BAD_REQUEST, `List field "${field.title}" is full and does not allow more entries`);
+                }
+              }
             }
             // Validate max entries
             if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
