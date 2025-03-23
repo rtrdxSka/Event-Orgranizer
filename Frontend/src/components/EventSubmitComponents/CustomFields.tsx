@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Controller, UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -159,7 +159,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
   );
 };
 
-// List Field Component - Updated with improved logic
+// List Field Component - Fixed to handle empty values arrays
 export const ListField: React.FC<CustomFieldProps> = ({ 
   field,
   formMethods
@@ -167,21 +167,24 @@ export const ListField: React.FC<CustomFieldProps> = ({
   const { control, setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
   
-  // Determine if field is editable based on field properties
-  // A field is editable if it's not readonly AND (it's required OR optional)
+  // Determine if field is editable
   const isEditable = !field.readonly;
   
   // Determine if user can add new entries
-  // allowUserAdd is tied to whether the field is required/optional vs readonly
   const canUserAdd = field.allowUserAdd && isEditable;
   
-  const [initialized, setInitialized] = React.useState(false);
+  // Track if we've initialized the form field
+  const [initialized, setInitialized] = useState(false);
   
-  // Initialize the form field with existing values from the server
-  React.useEffect(() => {
-    // Only initialize once and when field values exist
-    if (!initialized && field.values && field.values.length > 0) {
-      setValue(fieldId, [...field.values]);
+  // Initialize the form field with existing values or empty array
+  useEffect(() => {
+    if (!initialized) {
+      // Start with an empty array if field.values is undefined or empty
+      const initialValues = (field.values && field.values.length > 0) 
+        ? [...field.values] 
+        : [];
+      
+      setValue(fieldId, initialValues);
       setInitialized(true);
     }
   }, [field.id, field.values, fieldId, initialized, setValue]);
@@ -189,34 +192,34 @@ export const ListField: React.FC<CustomFieldProps> = ({
   // Get the current values from form state
   const formValues = watch(fieldId) || [];
   
-  // Separate original values (from server) and user-added values
-  const originalValues = field.values || [];
-  const userValues = initialized ? formValues.slice(originalValues.length) : [];
+  // Determine which values are original (from server) and which are user-added
+  const originalValues = (field.values || []);
+  // User values are all values if original values were empty, or the additional values if originals existed
+  const userValues = originalValues.length === 0 
+    ? formValues 
+    : formValues.slice(originalValues.length);
   
   // Check if we've reached the maximum number of entries
   const hasReachedMaxEntries = field.maxEntries && 
-    (originalValues.length + userValues.length) >= field.maxEntries;
+    formValues.length >= field.maxEntries;
   
   // Handle adding a new empty input
   const handleAddEmpty = () => {
     if (canUserAdd && !hasReachedMaxEntries) {
-      // Get current form values or initialize with original values
-      const currentValues = watch(fieldId) || [...originalValues];
-      // Add an empty string to the end of the array
-      setValue(fieldId, [...currentValues, '']);
+      setValue(fieldId, [...formValues, '']);
     }
   };
   
   // Handle updating a value
   const handleValueChange = (index: number, value: string) => {
-    const newValues = [...(watch(fieldId) || [...originalValues])];
+    const newValues = [...formValues];
     newValues[index] = value;
     setValue(fieldId, newValues);
   };
   
   // Handle removing a value
   const handleRemoveValue = (index: number) => {
-    const newValues = [...(watch(fieldId) || [...originalValues])];
+    const newValues = [...formValues];
     newValues.splice(index, 1);
     setValue(fieldId, newValues);
   };
@@ -230,7 +233,7 @@ export const ListField: React.FC<CustomFieldProps> = ({
       
       <div className="space-y-2">
         {/* Display existing values from the server - non-editable */}
-        {originalValues.map((value, index) => (
+        {originalValues.length > 0 && originalValues.map((value, index) => (
           <div key={`original-${index}`} className="flex items-center space-x-2">
             <div className="p-2 bg-purple-800/40 rounded w-full">
               <p className="text-purple-100">{value}</p>
@@ -240,7 +243,11 @@ export const ListField: React.FC<CustomFieldProps> = ({
         
         {/* Display user-added values - editable */}
         {userValues.map((value, index) => {
-          const actualIndex = originalValues.length + index;
+          // Calculate the actual index in the formValues array
+          const actualIndex = originalValues.length > 0 
+            ? originalValues.length + index 
+            : index;
+            
           return (
             <div key={`user-${index}`} className="flex items-center space-x-2">
               <Input
@@ -284,17 +291,30 @@ export const ListField: React.FC<CustomFieldProps> = ({
           </p>
         )}
         
-        {/* Show message if the field is required */}
-        {field.required && originalValues.length === 0 && userValues.length === 0 && (
+        {/* Show message if the field is required but empty */}
+        {field.required && formValues.length === 0 && (
           <p className="text-red-400 text-sm mt-1">
             At least one entry is required
           </p>
         )}
         
         {/* If readonly and no values, show a message */}
-        {field.readonly && originalValues.length === 0 && (
+        {field.readonly && formValues.length === 0 && (
           <p className="text-purple-300 italic">No values specified</p>
         )}
+        
+        {/* Show "Add First Entry" button when no entries exist yet
+        {canUserAdd && formValues.length === 0 && !hasReachedMaxEntries && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleAddEmpty}
+            className="w-full mt-2 border-purple-500 text-purple-200 hover:bg-purple-800/50"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add First Entry
+          </Button>
+        )} */}
       </div>
     </div>
   );
