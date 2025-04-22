@@ -6,20 +6,11 @@ import { Loader2, XCircle, Info, AlignLeft, Calendar, MapPin, Plus, Check, Thumb
 import Navbar from '@/components/NavBar';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import CustomFieldRenderer from '@/components/EventSubmitComponents/CustomFields';
-
-
-// Define the form schema with Zod
-const eventSubmitSchema = z.object({
-  selectedDates: z.array(z.string()),
-  newDate: z.string().optional(),
-  selectedPlaces: z.array(z.string()),
-  newPlace: z.string().optional(),
-  customFields: z.record(z.any()),
-});
+import { eventSubmitSchema, validateEventSubmit } from '@/lib/validations/eventSubmit.schemas';
+import { toast } from 'sonner';
 
 type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
 
@@ -30,31 +21,10 @@ const EventSubmit = () => {
 
   // State for suggested places (outside the form)
   const [suggestedPlaces, setSuggestedPlaces] = useState<string[]>([]);
-
-  // Initialize react-hook-form
-  const {
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<EventSubmitFormData>({
-    resolver: zodResolver(eventSubmitSchema),
-    defaultValues: {
-      selectedDates: [],
-      newDate: new Date().toISOString().split('T')[0] + 'T12:00',
-      selectedPlaces: [],
-      newPlace: '',
-      customFields: {},
-    },
-  });
-
-  // Watch form values
-  const selectedDates = watch('selectedDates');
-  const newDate = watch('newDate');
-  const selectedPlaces = watch('selectedPlaces');
-  const newPlace = watch('newPlace');
   
+  // State for validation errors
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   // Fetch event data with react-query (one-time fetch)
   const { 
     data: event, 
@@ -71,6 +41,35 @@ const EventSubmit = () => {
     staleTime: Infinity
   });
 
+  // Initialize react-hook-form
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<{
+    selectedDates: string[];
+    newDate: string;
+    selectedPlaces: string[];
+    newPlace: string;
+    customFields: Record<string, any>;
+  }>({
+    defaultValues: {
+      selectedDates: [],
+      newDate: new Date().toISOString().split('T')[0] + 'T12:00',
+      selectedPlaces: [],
+      newPlace: '',
+      customFields: {},
+    },
+  });
+
+  // Watch form values
+  const selectedDates = watch('selectedDates');
+  const newDate = watch('newDate');
+  const selectedPlaces = watch('selectedPlaces');
+  const newPlace = watch('newPlace');
+  
   useEffect(() => {
     console.log("Event data updated:", event);
   }, [event]);
@@ -82,7 +81,7 @@ const EventSubmit = () => {
     // Ensure we have both date and time
     const [datePart, timePart] = newDate.split('T');
     if (!datePart || !timePart) {
-      alert("Please select both date and time");
+      toast.error("Please select both date and time");
       return;
     }
     
@@ -99,11 +98,24 @@ const EventSubmit = () => {
     });
     
     if (dateExists) {
-      alert("This date and time has already been suggested.");
+      toast.error("This date and time has already been suggested.");
+      return;
+    }
+    
+    // Validate adding a new date
+    if (!event.eventDates.allowUserAdd) {
+      toast.error("New dates cannot be added for this event");
+      return;
+    }
+    
+    if (event.eventDates.maxDates > 0 && 
+        event.eventDates.dates.length + suggestedDates.length >= event.eventDates.maxDates) {
+      toast.error(`Too many dates. Maximum allowed is ${event.eventDates.maxDates}`);
       return;
     }
     
     setSuggestedDates([...suggestedDates, dateStr]);
+    setValidationError(null);
   };
 
   // Handle date voting
@@ -113,10 +125,12 @@ const EventSubmit = () => {
     
     if (isVoted) {
       setValue('selectedDates', selectedDates.filter(d => d !== dateStr));
+      setValidationError(null);
     } else if (selectedDates.length < event.eventDates.maxVotes) {
       setValue('selectedDates', [...selectedDates, dateStr]);
+      setValidationError(null);
     } else {
-      alert(`You can only vote for ${event.eventDates.maxVotes} dates maximum.`);
+      toast.error(`You can only vote for ${event.eventDates.maxVotes} dates maximum.`);
     }
   };
 
@@ -128,6 +142,7 @@ const EventSubmit = () => {
     if (selectedDates.includes(dateStr)) {
       setValue('selectedDates', selectedDates.filter(d => d !== dateStr));
     }
+    setValidationError(null);
   };
   
   // Handle adding a new place suggestion
@@ -141,12 +156,25 @@ const EventSubmit = () => {
     );
     
     if (placeExists) {
-      alert("This place has already been suggested.");
+      toast.error("This place has already been suggested.");
+      return;
+    }
+    
+    // Validate adding a new place
+    if (!event.eventPlaces.allowUserAdd) {
+      toast.error("New places cannot be added for this event");
+      return;
+    }
+    
+    if (event.eventPlaces.maxPlaces > 0 && 
+        event.eventPlaces.places.length + suggestedPlaces.length >= event.eventPlaces.maxPlaces) {
+      toast.error(`Too many places. Maximum allowed is ${event.eventPlaces.maxPlaces}`);
       return;
     }
     
     setSuggestedPlaces([...suggestedPlaces, newPlace.trim()]);
     setValue('newPlace', ''); // Clear the input field
+    setValidationError(null);
   };
 
   // Handle place voting
@@ -156,10 +184,12 @@ const EventSubmit = () => {
     
     if (isVoted) {
       setValue('selectedPlaces', selectedPlaces.filter(p => p !== place));
+      setValidationError(null);
     } else if (selectedPlaces.length < event.eventPlaces.maxVotes) {
       setValue('selectedPlaces', [...selectedPlaces, place]);
+      setValidationError(null);
     } else {
-      alert(`You can only vote for ${event.eventPlaces.maxVotes} places maximum.`);
+      toast.error(`You can only vote for ${event.eventPlaces.maxVotes} places maximum.`);
     }
   };
 
@@ -171,18 +201,67 @@ const EventSubmit = () => {
     if (selectedPlaces.includes(place)) {
       setValue('selectedPlaces', selectedPlaces.filter(p => p !== place));
     }
+    setValidationError(null);
   };
 
   // Handle form submission
-  const onSubmit = (data: EventSubmitFormData) => {
+  const onSubmit = (formData: {
+    selectedDates: string[];
+    newDate: string;
+    selectedPlaces: string[];
+    newPlace: string;
+    customFields: Record<string, any>;
+  }) => {
+    if (!event) return;
+    
+    // Create the data structure expected by the validation function
+    const validateData: EventSubmitFormData = {
+      originalEvent: {
+        name: event.name,
+        description: event.description,
+        eventDates: {
+          allowUserAdd: event.eventDates.allowUserAdd,
+          dates: event.eventDates.dates || [],
+          maxDates: event.eventDates.maxDates || 0,
+          maxVotes: event.eventDates.maxVotes || 0
+        },
+        eventPlaces: {
+          allowUserAdd: event.eventPlaces.allowUserAdd,
+          places: event.eventPlaces.places || [],
+          maxPlaces: event.eventPlaces.maxPlaces || 0,
+          maxVotes: event.eventPlaces.maxVotes || 0
+        },
+        customFields: event.customFields || {}
+      },
+      selectedDates: formData.selectedDates,
+      suggestedDates: suggestedDates,
+      selectedPlaces: formData.selectedPlaces,
+      suggestedPlaces: suggestedPlaces,
+      customFields: formData.customFields
+    };
+    
+    // Validate submission
+    const validationResult = validateEventSubmit(validateData);
+    
+    if (validationResult !== true) {
+      setValidationError(validationResult);
+      toast.error(validationResult);
+      return;
+    }
+    
+    // If validation passes, proceed with submission
     console.log("Submitting selections:", { 
-      selectedDates: data.selectedDates,
+      selectedDates: formData.selectedDates,
       suggestedDates,
-      selectedPlaces: data.selectedPlaces,
+      selectedPlaces: formData.selectedPlaces,
       suggestedPlaces,
-      customFields: data.customFields
+      customFields: formData.customFields
     });
-    alert("Your selections have been submitted.");
+    
+    // Clear any validation errors
+    setValidationError(null);
+    
+    toast.success("Your selections have been submitted successfully!");
   };
 
   // Format date for display, including time
