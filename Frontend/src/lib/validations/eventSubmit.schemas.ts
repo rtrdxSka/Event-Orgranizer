@@ -100,6 +100,15 @@ export type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
 export const validateEventSubmit = (data: EventSubmitFormData): true | string => {
   const { originalEvent, selectedDates, suggestedDates, selectedPlaces, suggestedPlaces, customFields } = data;
   
+  // New validation: Ensure at least one date is voted for
+  if (selectedDates.length === 0) {
+    return "You must vote for at least one date";
+  }
+
+  if (selectedPlaces.length === 0) {
+    return "You must vote for at least one place";
+  }
+
   // Validate dates
   if (suggestedDates.length > 0 && !originalEvent.eventDates.allowUserAdd) {
     return "New dates cannot be added for this event";
@@ -216,18 +225,33 @@ export const validateEventSubmit = (data: EventSubmitFormData): true | string =>
     // List field validation
     else if (fieldDefinition.type === 'list') {
       const values = fieldValue as string[];
+      const originalValues = fieldDefinition.values || [];
       
-      if (fieldDefinition.required && (!values || values.length === 0)) {
-        return `Field "${fieldDefinition.title}" requires at least one entry`;
+      if (fieldDefinition.required) {
+        if (!values || values.length === 0) {
+          return `Field "${fieldDefinition.title}" requires at least one entry`;
+        }
+        
+        // If there are no original values, then the user must provide at least one non-empty value
+        if (values.length <= originalValues.length) {
+          // User hasn't added any new values - check if field is required
+          return `Field "${fieldDefinition.title}" requires you to add at least one value`;
+        }
+        
+        // Check if the added values are non-empty
+        const userAddedValues = values.slice(originalValues.length);
+        const hasNonEmptyUserValue = userAddedValues.some(val => val.trim() !== '');
+        if (!hasNonEmptyUserValue) {
+          return `Field "${fieldDefinition.title}" requires at least one non-empty value from you`;
+        }
       }
       
       // If readonly, values shouldn't be modified
       if (fieldDefinition.readonly) {
-        const originalValues = fieldDefinition.values || [];
-        
         if (values.length !== originalValues.length) {
           return `Field "${fieldDefinition.title}" is read-only and cannot be modified`;
         }
+        
         
         for (let i = 0; i < values.length; i++) {
           if (values[i] !== originalValues[i]) {
