@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { getEvent } from '@/lib/api';
 import { Loader2, XCircle, Info, AlignLeft, Calendar, MapPin, Plus, Check, ThumbsUp } from 'lucide-react';
 import Navbar from '@/components/NavBar';
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import CustomFieldRenderer from '@/components/EventSubmitComponents/CustomFields';
 import { eventSubmitSchema, validateEventSubmit } from '@/lib/validations/eventSubmit.schemas';
 import { toast } from 'sonner';
+import useAuth from '@/hooks/useAuth';
+import { formatEventResponseData } from '@/lib/utils/formatEventResponseData';
 
 type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
 
@@ -24,6 +26,8 @@ const EventSubmit = () => {
   
   // State for validation errors
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const { user } = useAuth();
 
   // Fetch event data with react-query (one-time fetch)
   const { 
@@ -69,6 +73,7 @@ const EventSubmit = () => {
   const newDate = watch('newDate');
   const selectedPlaces = watch('selectedPlaces');
   const newPlace = watch('newPlace');
+
   
   useEffect(() => {
     console.log("Event data updated:", event);
@@ -260,6 +265,24 @@ const EventSubmit = () => {
     
     // Clear any validation errors
     setValidationError(null);
+
+    const responseData = formatEventResponseData(
+      event,
+      user._id, // User ID is required
+      user.email, // User email is required
+      user.name, // User name if available
+      {
+        selectedDates: formData.selectedDates,
+        selectedPlaces: formData.selectedPlaces,
+        customFields: formData.customFields
+      },
+      suggestedDates,
+      suggestedPlaces
+    );
+    
+    // Log the formatted data to verify structure
+    console.log("Formatted response data:", responseData);
+    console.log(event);
     
     toast.success("Your selections have been submitted successfully!");
   };
