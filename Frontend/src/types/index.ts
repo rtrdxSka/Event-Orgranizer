@@ -212,3 +212,50 @@ export interface EventGet {
   updatedAt: string;
   __v: number;
 }
+
+//eventResponse types
+export interface EventResponsePayload {
+  eventId: string;
+  selectedDates: string[];
+  selectedPlaces: string[];
+  suggestedDates: string[];
+  suggestedPlaces: string[];
+  customFields: Record<string, any>;
+  votingCategories: VotingCategory[];
+}
+
+export interface VotingCategory {
+  categoryName: string;
+  options: VotingOption[];
+  _id?: string;
+}
+
+export interface VotingOption {
+  optionName: string;
+  votes: string[];
+  _id?: string;
+}
+
+export interface EventResponseSuccess {
+  status: string;
+  data: {
+    response: EventResponseData;
+    votingCategories: VotingCategory[];
+  }
+}
+
+export interface EventResponseData {
+  eventId: string;
+  userId: string;
+  userEmail: string;
+  fieldResponses: FieldResponse[];
+  _id: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FieldResponse {
+  fieldId: string;
+  type: string;
+  response: any;
+}

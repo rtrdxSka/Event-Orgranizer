@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -64,3 +64,16 @@ export const createEvent = async (eventData: CreateEventPayload): Promise<EventR
 export const getEvent = async (eventUUID: string): Promise<EventGet> => {
   return API.get(`/event/submit/${eventUUID}`);
 }
+
+
+// Submit event response
+export const submitEventResponse = async (responseData: EventResponsePayload): Promise<EventResponseSuccess> => {
+  const response = await API.post('/event/response', responseData);
+  return response;
+};
+
+// Get user's previous response to this event (if any)
+export const getUserEventResponse = async (eventId: string) => {
+  const response = await API.get(`/event/${eventId}/response`);
+  return response;
+};

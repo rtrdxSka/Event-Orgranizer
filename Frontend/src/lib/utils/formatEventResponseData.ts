@@ -117,14 +117,23 @@ export const formatEventResponseData = (
   if (event.customFields && Object.keys(event.customFields).length > 0) {
     // Iterate through each custom field
     for (const [fieldId, fieldData] of Object.entries(event.customFields)) {
-      const fieldResponse = formData.customFields[fieldId];
+      // Always skip if field is readonly - check before accessing fieldResponse
+      if (fieldData.readonly) {
+        continue;
+      }
       
-      // Skip if field is readonly
-      if (fieldData.readonly) continue;
+      const fieldResponse = formData.customFields[fieldId];
+      // Skip undefined/null responses
+      if (fieldResponse === undefined || fieldResponse === null) {
+        continue;
+      }
       
       switch (fieldData.type) {
         case 'text':
           // For text fields, simply add a field response
+          // Skip if field is readonly
+          if (fieldData.readonly) continue;
+          
           if (fieldResponse !== undefined && fieldResponse !== "") {
             response.fieldResponses.push({
               fieldId,
@@ -135,11 +144,13 @@ export const formatEventResponseData = (
           break;
           
         case 'list':
-          // For list fields, include all user-added values
+          // For list fields, include ONLY user-added values
+          if (fieldData.readonly) continue;
+          
           const originalValues = fieldData.values || [];
           const listValues = Array.isArray(fieldResponse) ? fieldResponse : [fieldResponse];
           
-          // Keep only user-added values
+          // Keep only user-added values (those beyond the original values)
           const userAddedValues = listValues.slice(originalValues.length);
           const nonEmptyUserValues = userAddedValues.filter(val => val && val.trim() !== '');
           

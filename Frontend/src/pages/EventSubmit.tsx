@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getEvent } from '@/lib/api';
+import { getEvent, submitEventResponse } from '@/lib/api';
 import { Loader2, XCircle, Info, AlignLeft, Calendar, MapPin, Plus, Check, ThumbsUp } from 'lucide-react';
 import Navbar from '@/components/NavBar';
 import { useForm, Controller } from 'react-hook-form';
@@ -33,7 +33,6 @@ const EventSubmit = () => {
   const { 
     data: event, 
     isLoading, 
-    error 
   } = useQuery({
     queryKey: ['event', eventUUID],
     queryFn: () => getEvent(eventUUID || ''),
@@ -210,6 +209,21 @@ const EventSubmit = () => {
   };
 
   // Handle form submission
+  const { mutate: submitResponse, isPending, isSuccess, isError, error } = useMutation({
+    mutationFn: submitEventResponse,
+    onSuccess: (data) => {
+      toast.success("Your responses have been submitted successfully!");
+      // Optionally redirect to another page or update UI
+      console.log("Response submitted successfully:", data);
+    },
+    onError: (error) => {
+      const errorMessage = error?.message || "Failed to submit your response";
+      setValidationError(errorMessage);
+      toast.error(errorMessage);
+      console.error("Submission error:", error);
+    }
+  });
+  
   const onSubmit = (formData: {
     selectedDates: string[];
     newDate: string;
@@ -254,23 +268,12 @@ const EventSubmit = () => {
       return;
     }
     
-    // If validation passes, proceed with submission
-    console.log("Submitting selections:", { 
-      selectedDates: formData.selectedDates,
-      suggestedDates,
-      selectedPlaces: formData.selectedPlaces,
-      suggestedPlaces,
-      customFields: formData.customFields
-    });
-    
-    // Clear any validation errors
-    setValidationError(null);
-    console.log("Those are the custom fields",formData.customFields)
+    // If validation passes, format the response data
     const responseData = formatEventResponseData(
       event,
-      user._id, // User ID is required
-      user.email, // User email is required
-      user.name, // User name if available
+      user._id,
+      user.email,
+      user.name,
       {
         selectedDates: formData.selectedDates,
         selectedPlaces: formData.selectedPlaces,
@@ -280,11 +283,52 @@ const EventSubmit = () => {
       suggestedPlaces
     );
     
-    // Log the formatted data to verify structure
-    console.log("Formatted response data:", responseData);
-    console.log(event);
+    // Process the custom fields to remove read-only fields and extract only user-added entries for lists
+    const processedCustomFields = {};
     
-    toast.success("Your selections have been submitted successfully!");
+    if (event.customFields) {
+      Object.entries(formData.customFields).forEach(([fieldId, fieldValue]) => {
+        const fieldDef = event.customFields[fieldId];
+        
+        // Skip read-only fields entirely
+        if (fieldDef?.readonly) {
+          return;
+        }
+        
+        // Handle list fields - only include user-added values
+        if (fieldDef?.type === 'list' && Array.isArray(fieldValue)) {
+          const originalValues = fieldDef.values || [];
+          const userAddedValues = fieldValue.slice(originalValues.length);
+          
+          // Only add if there are user-added values
+          if (userAddedValues.length > 0) {
+            processedCustomFields[fieldId] = userAddedValues;
+          }
+        } else {
+          // For other field types, include as is
+          processedCustomFields[fieldId] = fieldValue;
+        }
+      });
+    }
+    
+    // Create the final submission payload with properly processed data
+    const submissionData = {
+      eventId: event._id,
+      selectedDates: formData.selectedDates,
+      selectedPlaces: formData.selectedPlaces,
+      suggestedDates: suggestedDates,
+      suggestedPlaces: suggestedPlaces,
+      customFields: processedCustomFields, // Use the processed custom fields
+      votingCategories: responseData.votingCategories
+    };
+    
+    console.log("Submitting data:", submissionData);
+    
+    // Submit to backend
+    submitResponse(submissionData);
+    
+    // Clear any validation errors
+    setValidationError(null);
   };
 
   // Format date for display, including time
