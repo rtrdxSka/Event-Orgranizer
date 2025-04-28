@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, getEventByUUID } from "../services/event.service";
+import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getUserEventResponse } from "../services/event.service";
 import appAssert from "../utils/appAssert";
-import { BAD_REQUEST, OK } from "../constants/http";
+import { BAD_REQUEST, CREATED, OK } from "../constants/http";
+import { createEventResponseSchema } from "./eventResponse.schemas";
 
 
 export const createEventHandler = catchErrors(async (req: Request, res: Response) => {
@@ -36,4 +37,65 @@ export const getEventByUUIDHandler = catchErrors(async (req, res) => {
   const event = await getEventByUUID(eventUUID);
 
   return res.status(OK).json(event);
+});
+
+//event Response controller
+
+export const submitEventResponseHandler = catchErrors(async (req: Request, res: Response) => {
+  // Get user ID from the authenticated session
+  const userId = req.userId;
+  
+  // Validate request data
+  const validatedData = createEventResponseSchema.parse(req.body);
+  
+  // Get user email from the authenticated user object
+  const userEmail = req.userEmail;
+  appAssert(userEmail, 400, "User email is required");
+
+
+  // Create or update event response
+  const { response, event } = await createOrUpdateEventResponse(
+    userId.toString(),
+    userEmail,
+    validatedData
+  );
+
+  return res.status(CREATED).json({
+    status: "success",
+    data: {
+      response,
+      votingCategories: event.votingCategories
+    }
+  });
+});
+
+export const getEventResponsesHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  
+  const { event, responses } = await getEventResponses(eventId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        description: event.description,
+        votingCategories: event.votingCategories
+      },
+      responses
+    }
+  });
+});
+
+export const getUserEventResponseHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  const response = await getUserEventResponse(eventId, userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: response
+  });
 });
