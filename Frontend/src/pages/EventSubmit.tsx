@@ -265,7 +265,7 @@ const EventSubmit = () => {
     
     // Clear any validation errors
     setValidationError(null);
-
+    console.log("Those are the custom fields",formData.customFields)
     const responseData = formatEventResponseData(
       event,
       user._id, // User ID is required

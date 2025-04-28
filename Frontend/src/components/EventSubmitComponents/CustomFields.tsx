@@ -77,9 +77,30 @@ export const RadioField: React.FC<CustomFieldProps> = ({
   const fieldId = `customFields.${field.id}`;
   const [newOption, setNewOption] = useState('');
   
+  // Track user-added options separately
   const [userAddedOptions, setUserAddedOptions] = useState<Array<{id: number, label: string}>>([]);
   const allOptions = [...(field.options || []), ...userAddedOptions];
   const hasReachedMaxOptions = field.maxOptions && allOptions.length >= field.maxOptions;
+
+  // Initialize the form field with a structure that can track both selection and user-added options
+  useEffect(() => {
+    // Get current value
+    const currentValue = watch(fieldId);
+    
+    // If no value is set yet, initialize with an object structure
+    if (!currentValue) {
+      setValue(fieldId, {
+        value: '', // Selected option value
+        userAddedOptions: [] // Array to track all user-added options
+      });
+    } else if (typeof currentValue === 'string') {
+      // If current value is just a string, convert to our new structure
+      setValue(fieldId, {
+        value: currentValue,
+        userAddedOptions: []
+      });
+    }
+  }, [fieldId, setValue, watch]);
 
   // Add a new option
   const handleAddOption = () => {
@@ -96,22 +117,59 @@ export const RadioField: React.FC<CustomFieldProps> = ({
       
       const newId = Date.now();
       const newUserOption = { id: newId, label: newOption.trim() };
+      
+      // Update our local state to track this option
       setUserAddedOptions([...userAddedOptions, newUserOption]);
+      
+      // Update the form data to track all user-added options
+      const formValue = watch(fieldId) || { value: '', userAddedOptions: [] };
+      const updatedUserOptions = [...(formValue.userAddedOptions || []), newOption.trim()];
+      
+      setValue(fieldId, {
+        ...formValue,
+        userAddedOptions: updatedUserOptions
+      });
+      
       setNewOption('');
     }
   };
   
   // Remove a user-added option
   const handleRemoveOption = (id: number) => {
-    setUserAddedOptions(userAddedOptions.filter(opt => opt.id !== id));
-    
-    // If currently selected option is being removed, clear selection
-    const currentValue = watch(fieldId);
+    // Find the option being removed
     const optionBeingRemoved = userAddedOptions.find(opt => opt.id === id);
-    if (optionBeingRemoved && currentValue === optionBeingRemoved.label) {
-      setValue(fieldId, '');
+    
+    if (optionBeingRemoved) {
+      // Update our local state
+      setUserAddedOptions(userAddedOptions.filter(opt => opt.id !== id));
+      
+      // Update the form value
+      const formValue = watch(fieldId) || { value: '', userAddedOptions: [] };
+      const updatedUserOptions = (formValue.userAddedOptions || [])
+        .filter(option => option !== optionBeingRemoved.label);
+      
+      // If currently selected value is being removed, clear selection
+      const newValue = formValue.value === optionBeingRemoved.label ? '' : formValue.value;
+      
+      setValue(fieldId, {
+        value: newValue,
+        userAddedOptions: updatedUserOptions
+      });
     }
   };
+  
+  // Handle option selection
+  const handleOptionSelect = (value: string) => {
+    // Update the form value with the selected option
+    const formValue = watch(fieldId) || { value: '', userAddedOptions: [] };
+    setValue(fieldId, {
+      ...formValue,
+      value
+    });
+  };
+  
+  // Get the currently selected value from the form
+  const selectedValue = watch(`${fieldId}.value`) || '';
   
   return (
     <div className="bg-purple-800/30 rounded-lg p-4 mb-4">
@@ -120,64 +178,57 @@ export const RadioField: React.FC<CustomFieldProps> = ({
         {field.required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       
-      <Controller
-        name={fieldId}
-        control={control}
-        defaultValue=""
-        render={({ field: formField }) => (
-          <RadioGroup
-            value={formField.value}
-            onValueChange={formField.onChange}
-            className="space-y-2"
-          >
-            {/* Original options */}
-            {(field.options || []).map((option) => (
-              <div key={`original-${option.id}`} className="flex items-center space-x-2 p-2 bg-purple-800/40 rounded">
-                <RadioGroupItem
-                  id={`${fieldId}-${option.id}`}
-                  value={option.label}
-                  className="text-purple-600 border-purple-400 bg-purple-800/50"
-                />
-                <Label 
-                  htmlFor={`${fieldId}-${option.id}`} 
-                  className="text-purple-100"
-                >
-                  {option.label}
-                </Label>
-              </div>
-            ))}
-            
-            {/* User-added options */}
-            {userAddedOptions.map((option) => (
-              <div key={`user-${option.id}`} className="flex items-center justify-between p-2 bg-purple-700/40 rounded border border-purple-500/30">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem
-                    id={`${fieldId}-${option.id}`}
-                    value={option.label}
-                    className="text-purple-600 border-purple-400 bg-purple-800/50"
-                  />
-                  <Label 
-                    htmlFor={`${fieldId}-${option.id}`} 
-                    className="text-purple-100"
-                  >
-                    {option.label}
-                  </Label>
-                  <span className="ml-2 px-2 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Your suggestion</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveOption(option.id)}
-                  className="text-red-300 hover:text-red-200 hover:bg-red-800/30"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </RadioGroup>
-        )}
-      />
+      <div className="space-y-2">
+        {/* Original options */}
+        {(field.options || []).map((option) => (
+          <div key={`original-${option.id}`} className="flex items-center space-x-2 p-2 bg-purple-800/40 rounded">
+            <input
+              type="radio"
+              id={`${fieldId}-${option.id}`}
+              checked={selectedValue === option.label}
+              onChange={() => handleOptionSelect(option.label)}
+              className="text-purple-600 border-purple-400 bg-purple-800/50"
+            />
+            <Label 
+              htmlFor={`${fieldId}-${option.id}`} 
+              className="text-purple-100"
+            >
+              {option.label}
+            </Label>
+          </div>
+        ))}
+        
+        {/* User-added options */}
+        {userAddedOptions.map((option) => (
+          <div key={`user-${option.id}`} className="flex items-center justify-between p-2 bg-purple-700/40 rounded border border-purple-500/30">
+            <div className="flex items-center space-x-2">
+              <input
+                type="radio"
+                id={`${fieldId}-${option.id}`}
+                checked={selectedValue === option.label}
+                onChange={() => handleOptionSelect(option.label)}
+                className="text-purple-600 border-purple-400 bg-purple-800/50"
+              />
+              <Label 
+                htmlFor={`${fieldId}-${option.id}`} 
+                className="text-purple-100"
+              >
+                {option.label}
+              </Label>
+              <span className="ml-2 px-2 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Your suggestion</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => handleRemoveOption(option.id)}
+              className="text-red-300 hover:text-red-200 hover:bg-red-800/30"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
       
       {/* Add new option input */}
       {field.allowUserAddOptions && (
@@ -224,38 +275,100 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
   const fieldId = `customFields.${field.id}`;
   const [newOption, setNewOption] = useState('');
 
-  const [userAddedOptions, setUserAddedOptions] = useState<Array<{id: number, label: string, checked: boolean}>>([]);
+  // Track user-added options in local state
+  const [userAddedOptions, setUserAddedOptions] = useState<Array<{id: string, label: string}>>([]);
 
-  const allOptions = [...(field.options || []), ...userAddedOptions];
+  // Initialize the form data structure when component mounts
+  useEffect(() => {
+    // Create the structure to track both checked options and all user-added options
+    // We'll store the form data as an object with:
+    // 1. User-added options list
+    // 2. A property for each option (original or user-added) with boolean values
+    
+    const initialFormData = {
+      userAddedOptions: [] // This array tracks all user-added options
+    };
+    
+    // Add initial checked state for original options
+    field.options?.forEach(option => {
+      initialFormData[option.id.toString()] = option.checked || false;
+    });
+    
+    setValue(fieldId, initialFormData);
+  }, [fieldId, field.options, setValue]);
 
-  const hasReachedMaxOptions = field.maxOptions && allOptions.length >= field.maxOptions;
+  // Get current form value
+  const formValue = watch(fieldId) || { userAddedOptions: [] };
   
+  // Calculate if we've reached max options
+  const allOptions = [
+    ...(field.options || []),
+    ...userAddedOptions
+  ];
+  const hasReachedMaxOptions = field.maxOptions && allOptions.length >= field.maxOptions;
+
+  // Handle adding a new option
   const handleAddOption = () => {
-    if (newOption.trim() && field.allowUserAddOptions && !hasReachedMaxOptions) {
-      // Check if option already exists
-      const optionExists = allOptions.some(opt => 
-        opt.label.toLowerCase() === newOption.trim().toLowerCase()
-      );
-      
-      if (optionExists) {
-        alert('This option already exists');
-        return;
-      }
-      
-      const newId = Date.now();
-      const newUserOption = { id: newId, label: newOption.trim(), checked: false };
-      setUserAddedOptions([...userAddedOptions, newUserOption]);
-      
-      // Initialize the checkbox state in the form
-      setValue(`${fieldId}.${newId}`, false);
-      
-      setNewOption('');
+    if (!newOption.trim() || !field.allowUserAddOptions || hasReachedMaxOptions) return;
+    
+    // Check if option already exists (in either original or user-added)
+    const optionLabelExists = allOptions.some(opt => 
+      opt.label.toLowerCase() === newOption.trim().toLowerCase()
+    );
+    
+    if (optionLabelExists) {
+      alert('This option already exists');
+      return;
     }
+    
+    // Generate a unique ID for the new option
+    const newId = `user_${Date.now()}`;
+    const newUserOption = { id: newId, label: newOption.trim() };
+    
+    // Update local state
+    setUserAddedOptions([...userAddedOptions, newUserOption]);
+    
+    // Update form data - add to userAddedOptions array and set initial checked state to false
+    const updatedFormValue = { 
+      ...formValue,
+      userAddedOptions: [...(formValue.userAddedOptions || []), newOption.trim()]
+    };
+    updatedFormValue[newId] = false; // Initialize as unchecked
+    
+    setValue(fieldId, updatedFormValue);
+    setNewOption('');
   };
   
-  // Remove a user-added option
-  const handleRemoveOption = (id: number) => {
-    setUserAddedOptions(userAddedOptions.filter(opt => opt.id !== id));
+  // Handle removing a user-added option
+  const handleRemoveOption = (option: {id: string, label: string}) => {
+    // Update local state
+    setUserAddedOptions(userAddedOptions.filter(opt => opt.id !== option.id));
+    
+    // Update form data
+    const updatedFormValue = { ...formValue };
+    
+    // Remove from userAddedOptions array
+    updatedFormValue.userAddedOptions = (formValue.userAddedOptions || [])
+      .filter(label => label !== option.label);
+    
+    // Remove the option's checked property
+    delete updatedFormValue[option.id];
+    
+    setValue(fieldId, updatedFormValue);
+  };
+  
+  // Handle checkbox change for any option
+  const handleCheckboxChange = (optionId: string, checked: boolean) => {
+    setValue(`${fieldId}.${optionId}`, checked);
+  };
+  
+  // Check if the field has any selected options for validation
+  const hasSelectedOptions = () => {
+    if (!formValue) return false;
+    
+    return Object.entries(formValue).some(([key, value]) => {
+      return key !== 'userAddedOptions' && value === true;
+    });
   };
   
   return (
@@ -320,7 +433,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => handleRemoveOption(option.id)}
+              onClick={() => handleRemoveOption(option)}
               className="text-red-300 hover:text-red-200 hover:bg-red-800/30"
             >
               <X className="h-4 w-4" />
@@ -363,7 +476,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
       )}
       
       {/* Field validation message */}
-      {field.required && Object.keys(watch(fieldId) || {}).length === 0 && (
+      {field.required && !hasSelectedOptions() && (
         <p className="text-red-400 text-sm mt-2">
           At least one option must be selected
         </p>
