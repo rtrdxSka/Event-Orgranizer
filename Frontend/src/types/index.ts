@@ -234,6 +234,7 @@ export interface VotingOption {
   optionName: string;
   votes: string[];
   _id?: string;
+  addedBy?: string;
 }
 
 export interface EventResponseSuccess {
@@ -241,6 +242,7 @@ export interface EventResponseSuccess {
   data: {
     response: EventResponseData;
     votingCategories: VotingCategory[];
+    isUpdate?: boolean;
   }
 }
 
@@ -258,4 +260,13 @@ export interface FieldResponse {
   fieldId: string;
   type: string;
   response: any;
+}
+
+export interface UserEventResponse {
+  fieldResponses: FieldResponse[];
+  userVotes: Record<string, string[]>;
+  userAddedOptions: Record<string, string[]>;
+  userSuggestedDates: string[];
+  userSuggestedPlaces: string[];
+  hasResponse: boolean;
 }
