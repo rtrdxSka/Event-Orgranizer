@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getEvent, submitEventResponse } from '@/lib/api';
+import { getEvent, getUserEventResponse, submitEventResponse } from '@/lib/api';
 import { Loader2, XCircle, Info, AlignLeft, Calendar, MapPin, Plus, Check, ThumbsUp } from 'lucide-react';
 import Navbar from '@/components/NavBar';
 import { useForm, Controller } from 'react-hook-form';
@@ -26,6 +26,9 @@ const EventSubmit = () => {
   
   // State for validation errors
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  // Track if we've loaded user responses
+  const [userResponseLoaded, setUserResponseLoaded] = useState(false);
 
   const { user } = useAuth();
 
@@ -33,6 +36,7 @@ const EventSubmit = () => {
   const { 
     data: event, 
     isLoading, 
+    error
   } = useQuery({
     queryKey: ['event', eventUUID],
     queryFn: () => getEvent(eventUUID || ''),
@@ -50,6 +54,7 @@ const EventSubmit = () => {
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<{
     selectedDates: string[];
@@ -73,10 +78,183 @@ const EventSubmit = () => {
   const selectedPlaces = watch('selectedPlaces');
   const newPlace = watch('newPlace');
 
-  
   useEffect(() => {
     console.log("Event data updated:", event);
   }, [event]);
+
+  // Fetch user's previous response once event is loaded
+  const {
+    data: userResponse,
+    isLoading: isLoadingUserResponse,
+    isError: isErrorUserResponse,
+    error: userResponseError
+  } = useQuery({
+    queryKey: ['userEventResponse', event?._id],
+    queryFn: () => getUserEventResponse(event?._id),
+    enabled: !!event?._id && !!user,
+    onSuccess: (data) => {
+      console.log('User response data:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching user response:', error);
+      // Only show toast for real errors, not 404s which are expected when there's no response
+      if (error.status !== 404) {
+        toast.error('Failed to load your previous response');
+      }
+    }
+  });
+
+  // Populate the form with the user's previous response
+  useEffect(() => {
+    if (userResponse?.data && event && !userResponseLoaded) {
+      const { 
+        userVotes, 
+        userAddedOptions, 
+        userSuggestedDates, 
+        userSuggestedPlaces,
+        fieldResponses 
+      } = userResponse.data;
+      
+      console.log('Loading user responses to form:', userResponse.data);
+      
+      // Set selected dates
+      const dateVotes = userVotes['date'] || [];
+      setValue('selectedDates', dateVotes);
+      
+      // Set suggested dates
+      if (userSuggestedDates && userSuggestedDates.length > 0) {
+        setSuggestedDates(userSuggestedDates);
+      }
+      
+      // Set selected places
+      const placeVotes = userVotes['place'] || [];
+      setValue('selectedPlaces', placeVotes);
+      
+      // Set suggested places
+      if (userSuggestedPlaces && userSuggestedPlaces.length > 0) {
+        setSuggestedPlaces(userSuggestedPlaces);
+      }
+      
+      // Initialize customFieldsData object
+      const customFieldsData = {};
+      
+      // Handle custom fields responses
+      if (fieldResponses && fieldResponses.length > 0) {
+        // Process specific field responses first
+        fieldResponses.forEach(fieldResponse => {
+          const { fieldId, type, response } = fieldResponse;
+          const field = event.customFields?.[fieldId];
+          
+          if (!field) return; // Skip if field doesn't exist in the event
+          
+          // Handle different field types
+          if (type === 'text') {
+            customFieldsData[fieldId] = response;
+          } else if (type === 'list') {
+            // For list fields, we need to combine original values with user responses
+            const originalValues = field.values || [];
+            customFieldsData[fieldId] = [...originalValues, ...response];
+          }
+        });
+      }
+      
+      // Handle voting fields (radio, checkbox)
+      Object.entries(event.customFields || {}).forEach(([fieldId, field]) => {
+        // Skip if we've already handled this field
+        if (customFieldsData[fieldId]) return;
+        
+        // Handle radio and checkbox fields based on voting data
+        if (field.type === 'radio' || field.type === 'checkbox') {
+          // Find matching category in voting data
+          const categoryName = field.title;
+          const votes = userVotes[categoryName] || [];
+          const userOptions = userAddedOptions[categoryName] || [];
+          
+          if (field.type === 'radio') {
+            // For radio fields, just use the first vote (should be only one)
+            const selectedValue = votes[0];
+            if (selectedValue) {
+              customFieldsData[fieldId] = {
+                value: selectedValue,
+                userAddedOptions: userOptions
+              };
+            } else {
+              // Initialize with empty structure
+              customFieldsData[fieldId] = {
+                value: '',
+                userAddedOptions: userOptions
+              };
+            }
+          } else if (field.type === 'checkbox') {
+            // For checkbox fields, create a map of option ID -> true/false
+            const checkboxData = {
+              userAddedOptions: userOptions
+            };
+            
+            // Set original options
+            field.options?.forEach(option => {
+              const isChecked = votes.includes(option.label);
+              checkboxData[option.id.toString()] = isChecked;
+            });
+            
+            // Set user-added options
+            // Generate stable IDs for user-added options
+            userOptions.forEach((option, index) => {
+              // Use a hash-like approach for IDs to ensure they're stable
+              const optionId = `user_${option.replace(/\s+/g, '_').toLowerCase()}`;
+              const isChecked = votes.includes(option);
+              checkboxData[optionId] = isChecked;
+            });
+            
+            customFieldsData[fieldId] = checkboxData;
+          }
+        }
+      });
+      
+      // For fields not yet handled, initialize them with default values
+      Object.entries(event.customFields || {}).forEach(([fieldId, field]) => {
+        if (customFieldsData[fieldId]) return; // Skip if already handled
+        
+        switch (field.type) {
+          case 'text':
+            // Initialize text fields with their default value or empty string
+            customFieldsData[fieldId] = field.value || '';
+            break;
+            
+          case 'radio':
+            // Initialize radio fields with an empty structure
+            customFieldsData[fieldId] = {
+              value: field.selectedOption ? 
+                field.options?.find(o => o.id === field.selectedOption)?.label || '' : '',
+              userAddedOptions: []
+            };
+            break;
+            
+          case 'checkbox':
+            // Initialize checkbox fields with default checked states
+            const checkboxData = {
+              userAddedOptions: []
+            };
+            
+            field.options?.forEach(option => {
+              checkboxData[option.id.toString()] = option.checked || false;
+            });
+            
+            customFieldsData[fieldId] = checkboxData;
+            break;
+            
+          case 'list':
+            // Initialize list fields with their original values
+            customFieldsData[fieldId] = field.values || [];
+            break;
+        }
+      });
+      
+      console.log('Setting custom fields:', customFieldsData);
+      setValue('customFields', customFieldsData);
+      setUserResponseLoaded(true);
+    }
+  }, [userResponse, event, setValue, userResponseLoaded]);
 
   // Handle adding a new date suggestion
   const handleAddDate = () => {
@@ -209,7 +387,7 @@ const EventSubmit = () => {
   };
 
   // Handle form submission
-  const { mutate: submitResponse, isPending, isSuccess, isError, error } = useMutation({
+  const { mutate: submitResponse, isPending, isSuccess, isError, error: submitError } = useMutation({
     mutationFn: submitEventResponse,
     onSuccess: (data) => {
       toast.success("Your responses have been submitted successfully!");
@@ -407,6 +585,29 @@ const EventSubmit = () => {
   const canAddMorePlaces = !event.eventPlaces?.maxPlaces || 
     event.eventPlaces.places.length + suggestedPlaces.length < event.eventPlaces.maxPlaces;
 
+  // If loading user responses
+  if (isLoadingUserResponse && !userResponseLoaded) {
+    return (
+      <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
+        <Navbar />
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/50 to-purple-950/80" />
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="relative w-full max-w-md px-4 pt-16 text-center">
+            <Loader2 className="h-16 w-16 animate-spin text-purple-300 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-purple-100 mb-2">
+              Loading Your Responses
+            </h2>
+            <p className="text-purple-200">
+              Please wait while we fetch your previous responses...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
       <Navbar />
@@ -416,6 +617,14 @@ const EventSubmit = () => {
             <h1 className="text-3xl font-bold text-purple-100 mb-6 text-center">
               Event Details
             </h1>
+            
+            {userResponse?.data?.hasResponse && (
+              <div className="mb-6 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+                <p className="text-blue-200 text-center">
+                  You previously responded to this event. Your responses have been loaded and you can edit them below.
+                </p>
+              </div>
+            )}
             
             <form onSubmit={handleSubmit(onSubmit)}>
               {/* Event information fields */}
@@ -482,8 +691,6 @@ const EventSubmit = () => {
                                         Vote
                                       </>
                                     )}
-                
-                
                                   </button>
                                 </div>
                               );
@@ -793,7 +1000,7 @@ const EventSubmit = () => {
                   type="submit"
                   className="bg-purple-500 hover:bg-purple-400 text-white font-medium px-6 py-3 rounded-lg"
                 >
-                  Submit Responses
+                  {userResponse?.data?.hasResponse ? "Update Responses" : "Submit Responses"}
                 </Button>
               </div>
             </form>
