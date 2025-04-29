@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 interface VotingOption {
   optionName: string;
   votes: mongoose.Types.ObjectId[];
+  addedBy?: mongoose.Types.ObjectId;
 }
 
 interface VotingCategory {
@@ -98,7 +99,8 @@ const eventSchema = new mongoose.Schema<EventDocument>({
       categoryName: { type: String, required: true },
       options: [{
         optionName: { type: String, required: true },
-        votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+        votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+        addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
       }]
     }],
     default: []

@@ -222,63 +222,139 @@ export const createOrUpdateEventResponse = async (
 
   const userObjectId = new mongoose.Types.ObjectId(userId);
 
-  // STEP 1: Update the Event's votingCategories directly
+  // Check if this is an update to an existing response
+  const existingResponse = await EventResponseModel.findOne({
+    eventId: data.eventId,
+    userId
+  });
   
-  // First, process suggested dates and places
-  if (data.suggestedDates?.length || data.suggestedPlaces?.length) {
-    // Find date and place categories
-    let dateCategory = event.votingCategories.find(cat => cat.categoryName === "date");
-    let placeCategory = event.votingCategories.find(cat => cat.categoryName === "place");
+  const isUpdate = !!existingResponse;
 
-    // Add suggested dates if allowed
-    if (data.suggestedDates?.length && event.eventDates.allowUserAdd) {
-      if (!dateCategory) {
-        // Create date category if it doesn't exist
-        event.votingCategories.push({
-          categoryName: "date",
-          options: []
-        });
-        dateCategory = event.votingCategories[event.votingCategories.length - 1];
+  // STEP 1: Process voting categories
+  
+  // First, find and handle the date and place categories
+  let dateCategory = event.votingCategories.find(cat => cat.categoryName === "date");
+  let placeCategory = event.votingCategories.find(cat => cat.categoryName === "place");
+
+  // Handle dates
+  if (dateCategory) {
+    // Remove user's previous votes
+    dateCategory.options.forEach(option => {
+      const index = option.votes.findIndex(id => id.equals(userObjectId));
+      if (index !== -1) {
+        option.votes.splice(index, 1);
       }
-
-      // Add any new dates that don't already exist
-      for (const date of data.suggestedDates) {
-        const exists = dateCategory.options.some(opt => opt.optionName === date);
+    });
+    
+    // Add new votes for selected dates
+    data.selectedDates.forEach(dateStr => {
+      const option = dateCategory!.options.find(opt => opt.optionName === dateStr);
+      if (option) {
+        option.votes.push(userObjectId);
+      }
+    });
+    
+    // Add suggested dates if they don't exist yet
+    if (data.suggestedDates?.length && event.eventDates.allowUserAdd) {
+      for (const dateStr of data.suggestedDates) {
+        const exists = dateCategory.options.some(opt => opt.optionName === dateStr);
         if (!exists) {
           dateCategory.options.push({
-            optionName: date,
-            votes: []
+            optionName: dateStr,
+            votes: data.selectedDates.includes(dateStr) ? [userObjectId] : [],
+            addedBy: userObjectId // Track who added this date
           });
         }
       }
     }
+  } else if (data.suggestedDates?.length || data.selectedDates.length) {
+    // Create date category if it doesn't exist
+    const newDateCategory = {
+      categoryName: "date",
+      options: [
+        // Create options from selected dates
+        ...data.selectedDates.map(date => ({
+          optionName: date,
+          votes: [userObjectId],
+          addedBy: userObjectId // Track who added this date
+        })),
+        // Create options from suggested dates (if not already in selected)
+        ...(data.suggestedDates || [])
+          .filter(date => !data.selectedDates.includes(date))
+          .map(date => ({
+            optionName: date,
+            votes: [],
+            addedBy: userObjectId // Track who added this date
+          }))
+      ]
+    };
+    
+    event.votingCategories.push(newDateCategory);
+  }
 
-    // Add suggested places if allowed
-    if (data.suggestedPlaces?.length && event.eventPlaces.allowUserAdd) {
-      if (!placeCategory) {
-        // Create place category if it doesn't exist
-        event.votingCategories.push({
-          categoryName: "place",
-          options: []
-        });
-        placeCategory = event.votingCategories[event.votingCategories.length - 1];
+  // Handle places
+  if (placeCategory) {
+    // Remove user's previous votes
+    placeCategory.options.forEach(option => {
+      const index = option.votes.findIndex(id => id.equals(userObjectId));
+      if (index !== -1) {
+        option.votes.splice(index, 1);
       }
-
-      // Add any new places that don't already exist
+    });
+    
+    // Add new votes
+    data.selectedPlaces.forEach(place => {
+      const option = placeCategory!.options.find(opt => opt.optionName === place);
+      if (option) {
+        option.votes.push(userObjectId);
+      }
+    });
+    
+    // Add suggested places if they don't exist yet
+    if (data.suggestedPlaces?.length && event.eventPlaces.allowUserAdd) {
       for (const place of data.suggestedPlaces) {
         const exists = placeCategory.options.some(opt => opt.optionName === place);
         if (!exists) {
           placeCategory.options.push({
             optionName: place,
-            votes: []
+            votes: data.selectedPlaces.includes(place) ? [userObjectId] : [],
+            addedBy: userObjectId // Track who added this place
           });
         }
       }
     }
+  } else if (data.suggestedPlaces?.length || data.selectedPlaces.length) {
+    // Create place category if it doesn't exist
+    const newPlaceCategory = {
+      categoryName: "place",
+      options: [
+        // Create options from selected places
+        ...data.selectedPlaces.map(place => ({
+          optionName: place,
+          votes: [userObjectId],
+          addedBy: userObjectId // Track who added this place
+        })),
+        // Create options from suggested places (if not already in selected)
+        ...(data.suggestedPlaces || [])
+          .filter(place => !data.selectedPlaces.includes(place))
+          .map(place => ({
+            optionName: place,
+            votes: [],
+            addedBy: userObjectId // Track who added this place
+          }))
+      ]
+    };
+    
+    event.votingCategories.push(newPlaceCategory);
   }
 
-  // Now process all voting categories from the response including user-added options
+  // Process other voting categories (from custom fields)
   for (const responseCategory of data.votingCategories) {
+    // Skip date and place categories as we already handled them
+    if (responseCategory.categoryName === "date" || responseCategory.categoryName === "place") {
+      continue;
+    }
+    
     // Find matching category in the event
     let eventCategory = event.votingCategories.find(
       cat => cat.categoryName === responseCategory.categoryName
@@ -293,7 +369,7 @@ export const createOrUpdateEventResponse = async (
       event.votingCategories.push(eventCategory);
     }
 
-    // First, add ALL options from the response that don't exist in the event category yet
+    // First, add all options from the response that don't exist in the event category yet
     for (const responseOption of responseCategory.options) {
       const optionExists = eventCategory.options.some(opt => 
         opt.optionName === responseOption.optionName
@@ -303,7 +379,8 @@ export const createOrUpdateEventResponse = async (
         // This is a new option (user-added) - add it to the event category
         eventCategory.options.push({
           optionName: responseOption.optionName,
-          votes: [] // Start with empty votes, we'll update them below
+          votes: [], // Start with empty votes, we'll update them below
+          addedBy: userObjectId // Track who added this option
         });
       }
     }
@@ -336,6 +413,8 @@ export const createOrUpdateEventResponse = async (
   // Save the updated event with voting information
   await event.save();
 
+  // STEP 2: Handle the field responses in the EventResponse collection
+  
   // Convert from customFields to fieldResponses format
   const fieldResponses = Object.entries(data.customFields || {}).map(([fieldId, value]) => {
     // Find the field definition to determine type - using .get() for Map access
@@ -353,14 +432,6 @@ export const createOrUpdateEventResponse = async (
     (field.type === 'text' || 
      (field.type === 'list' && Array.isArray(field.response) && field.response.length > 0))
   );
-
-  // STEP 2: Handle the field responses in the EventResponse collection
-  
-  // Find existing response or create a new one
-  const existingResponse = await EventResponseModel.findOne({
-    eventId: data.eventId,
-    userId
-  });
 
   // Prepare the response data - only include non-voting field responses
   const responseData = {
@@ -385,7 +456,8 @@ export const createOrUpdateEventResponse = async (
 
   return {
     response,
-    event
+    event,
+    isUpdate
   };
 };
 
@@ -419,18 +491,45 @@ export const getUserEventResponse = async (eventId: string, userId: string) => {
     userId 
   });
 
-  // Extract user's votes from the event's voting categories
+  // Extract user's votes and added options from the event's voting categories
   const userVotes: Record<string, string[]> = {};
+  const userAddedOptions: Record<string, string[]> = {};
+  const userSuggestedDates: string[] = [];
+  const userSuggestedPlaces: string[] = [];
   const userObjectId = new mongoose.Types.ObjectId(userId);
 
   event.votingCategories.forEach(category => {
-    userVotes[category.categoryName] = category.options
-      .filter(option => option.votes.some(id => id.equals(userObjectId)))
-      .map(option => option.optionName);
+    // Initialize arrays for this category
+    userVotes[category.categoryName] = [];
+    userAddedOptions[category.categoryName] = [];
+    
+    // Extract options this user voted for and added
+    category.options.forEach(option => {
+      // Check if user voted for this option
+      if (option.votes.some(id => id.equals(userObjectId))) {
+        userVotes[category.categoryName].push(option.optionName);
+      }
+      
+      // Check if user added this option
+      if (option.addedBy && option.addedBy.equals(userObjectId)) {
+        userAddedOptions[category.categoryName].push(option.optionName);
+        
+        // Also track as suggested date/place for backward compatibility
+        if (category.categoryName === "date") {
+          userSuggestedDates.push(option.optionName);
+        } else if (category.categoryName === "place") {
+          userSuggestedPlaces.push(option.optionName);
+        }
+      }
+    });
   });
 
   return {
     fieldResponses: response?.fieldResponses || [],
-    userVotes
+    userVotes,
+    userAddedOptions,
+    userSuggestedDates,
+    userSuggestedPlaces,
+    hasResponse: !!response
   };
 };
