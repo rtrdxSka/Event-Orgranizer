@@ -112,8 +112,9 @@ const EventSubmit = () => {
         userAddedOptions, 
         userSuggestedDates, 
         userSuggestedPlaces,
-        fieldResponses 
+        fieldResponses,
       } = userResponse.data;
+      console.log('User response:', userResponse.data);
       
       console.log('Loading user responses to form:', userResponse.data);
       
@@ -168,7 +169,7 @@ const EventSubmit = () => {
           // Find matching category in voting data
           const categoryName = field.title;
           const votes = userVotes[categoryName] || [];
-          const userOptions = userAddedOptions[categoryName] || [];
+          const userOptions = userAddedOptions[`field_${field.id}`] || [];
           
           if (field.type === 'radio') {
             // For radio fields, just use the first vote (should be only one)
@@ -199,7 +200,7 @@ const EventSubmit = () => {
             
             // Set user-added options
             // Generate stable IDs for user-added options
-            userOptions.forEach((option, index) => {
+            userOptions.forEach(option => {
               // Use a hash-like approach for IDs to ensure they're stable
               const optionId = `user_${option.replace(/\s+/g, '_').toLowerCase()}`;
               const isChecked = votes.includes(option);
@@ -497,7 +498,8 @@ const EventSubmit = () => {
       suggestedDates: suggestedDates,
       suggestedPlaces: suggestedPlaces,
       customFields: processedCustomFields, // Use the processed custom fields
-      votingCategories: responseData.votingCategories
+      votingCategories: responseData.votingCategories,
+      suggestedOptions: responseData.suggestedOptions,
     };
     
     console.log("Submitting data:", submissionData);
@@ -965,7 +967,7 @@ const EventSubmit = () => {
 
               {/* Custom Fields Section */}
               {event.customFields && Object.keys(event.customFields).length > 0 && (
-                  <div className="bg-purple-800/30 rounded-lg p-6">
+                  <div className="bg-purple-800/30 rounded-lg p-6 mt-6">
                     <div className="flex items-center mb-2">
                       <AlignLeft className="h-5 w-5 text-purple-300 mr-2" />
                       <h2 className="text-xl font-semibold text-purple-100">Additional Information</h2>
@@ -994,13 +996,28 @@ const EventSubmit = () => {
                   </div>
                 )}
               
+              {/* Display validation errors */}
+              {validationError && (
+                <div className="mt-6 p-3 bg-red-900/30 border border-red-500/50 rounded-lg">
+                  <p className="text-red-300 text-center">{validationError}</p>
+                </div>
+              )}
+              
               {/* Submit button */}
               <div className="mt-8 flex justify-center">
                 <Button
                   type="submit"
                   className="bg-purple-500 hover:bg-purple-400 text-white font-medium px-6 py-3 rounded-lg"
+                  disabled={isPending}
                 >
-                  {userResponse?.data?.hasResponse ? "Update Responses" : "Submit Responses"}
+                  {isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {userResponse?.data?.hasResponse ? "Updating..." : "Submitting..."}
+                    </>
+                  ) : (
+                    userResponse?.data?.hasResponse ? "Update Responses" : "Submit Responses"
+                  )}
                 </Button>
               </div>
             </form>

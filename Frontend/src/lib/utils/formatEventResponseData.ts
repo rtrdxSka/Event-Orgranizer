@@ -1,13 +1,48 @@
-import { EventData } from "../validations/eventSubmit.schemas";
+// Final fixed version of formatEventResponseData with improved field matching
+import { EventData } from "@/lib/validations/eventSubmit.schemas";
 
 // Helper function to generate MongoDB-like ID
-// This creates a 24-character hexadecimal string similar to MongoDB ObjectId
 function generateMongoId(): string {
   const timestamp = Math.floor(Date.now() / 1000).toString(16).padStart(8, '0');
   const machineId = Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0');
   const processId = Math.floor(Math.random() * 65536).toString(16).padStart(4, '0');
   const counter = Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0');
   return timestamp + machineId + processId + counter;
+}
+
+// Interfaces for type safety
+interface CustomFieldOption {
+  id: number;
+  label: string;
+  checked?: boolean;
+}
+
+interface CustomField {
+  id?: number;
+  type: 'text' | 'list' | 'radio' | 'checkbox';
+  title: string;
+  placeholder?: string;
+  required?: boolean;
+  readonly?: boolean;
+  optional?: boolean;
+  value?: string;
+  options?: CustomFieldOption[];
+  values?: string[];
+  maxEntries?: number;
+  allowUserAdd?: boolean;
+  maxOptions?: number;
+  allowUserAddOptions?: boolean;
+  selectedOption?: number | null;
+}
+
+// Helper function to find field by title
+function findFieldByTitle(customFields: Record<string, any>, title: string): CustomField | undefined {
+  for (const [_, field] of Object.entries(customFields)) {
+    if (field.title === title) {
+      return field as CustomField;
+    }
+  }
+  return undefined;
 }
 
 export const formatEventResponseData = (
@@ -34,15 +69,22 @@ export const formatEventResponseData = (
     votingCategories: JSON.parse(JSON.stringify(event.votingCategories)),
     
     // For non-voting fields
-    fieldResponses: []
+    fieldResponses: [],
+    
+    // Store suggested dates and places for backward compatibility
+    suggestedDates: Array.isArray(suggestedDates) ? suggestedDates : [],
+    suggestedPlaces: Array.isArray(suggestedPlaces) ? suggestedPlaces : [],
+    
+    // New structured approach for storing ONLY user-suggested options
+    suggestedOptions: {} as Record<string, string[]>
   };
 
-  // Process dates - add all suggested dates to the date category
+  // Process dates voting category
   const dateCategoryIndex = response.votingCategories.findIndex(
     c => c.categoryName === "date"
   );
 
-  if (dateCategoryIndex !== -1) {
+  if (dateCategoryIndex !== -1 && Array.isArray(suggestedDates)) {
     // Add all suggested dates as options (regardless of voting)
     suggestedDates.forEach(dateStr => {
       const exists = response.votingCategories[dateCategoryIndex].options.some(
@@ -75,12 +117,12 @@ export const formatEventResponseData = (
     });
   }
 
-  // Process places - add all suggested places to the place category
+  // Process places voting category
   const placeCategoryIndex = response.votingCategories.findIndex(
     c => c.categoryName === "place"
   );
 
-  if (placeCategoryIndex !== -1) {
+  if (placeCategoryIndex !== -1 && Array.isArray(suggestedPlaces)) {
     // Add all suggested places as options (regardless of voting)
     suggestedPlaces.forEach(place => {
       const exists = response.votingCategories[placeCategoryIndex].options.some(
@@ -131,7 +173,6 @@ export const formatEventResponseData = (
       switch (fieldData.type) {
         case 'text':
           // For text fields, simply add a field response
-          // Skip if field is readonly
           if (fieldData.readonly) continue;
           
           if (fieldResponse !== undefined && fieldResponse !== "") {
@@ -180,12 +221,8 @@ export const formatEventResponseData = (
             categoryIndex = response.votingCategories.length - 1;
           }
           
-          // FIXED: First check if the field has any user-added options
-          // The field custom data structure may contain user-added options that didn't come from the original options
-          // These would be stored in a different structure from the original form
-          
-          // Get all possible user-added options (regardless if selected)
-          const userAddedOptions = [];
+          // Track ONLY user-added options
+          let userAddedOptions: string[] = [];
           
           // Check if there's a userAddedOptions property in the response
           if (fieldResponse && typeof fieldResponse === 'object' && 'userAddedOptions' in fieldResponse) {
@@ -194,7 +231,14 @@ export const formatEventResponseData = (
             if (Array.isArray(userOptions)) {
               userOptions.forEach(option => {
                 if (option && typeof option === 'string' && option.trim() !== '') {
-                  userAddedOptions.push(option.trim());
+                  // Check if this option is not in the original field options
+                  const isOriginalOption = fieldData.options?.some(
+                    (opt: CustomFieldOption) => opt.label === option.trim()
+                  ) || false;
+                  
+                  if (!isOriginalOption) {
+                    userAddedOptions.push(option.trim());
+                  }
                 }
               });
             }
@@ -204,29 +248,50 @@ export const formatEventResponseData = (
           const selectedValue = typeof fieldResponse === 'object' ? fieldResponse.value : fieldResponse;
           if (selectedValue && typeof selectedValue === 'string' && selectedValue.trim() !== '') {
             // Check if it's not one of the original options
-            const isUserAdded = fieldData.options ? 
-              !fieldData.options.some(opt => opt.label === selectedValue) : true;
+            const isOriginalOption = fieldData.options?.some(
+              (opt: CustomFieldOption) => opt.label === selectedValue.trim()
+            ) || false;
               
-            if (isUserAdded && !userAddedOptions.includes(selectedValue)) {
-              userAddedOptions.push(selectedValue);
+            if (!isOriginalOption && !userAddedOptions.includes(selectedValue.trim())) {
+              userAddedOptions.push(selectedValue.trim());
             }
           }
           
-          // Add all user-added options to the category (regardless of voting)
+          // Store ONLY user-added options in the new structure
+          if (userAddedOptions.length > 0) {
+            response.suggestedOptions[fieldId] = userAddedOptions;
+          }
+          
+          // Add all options (both original and user-added) to the category for voting purposes
           if (fieldData.allowUserAddOptions) {
+            // Add original options first
+            fieldData.options?.forEach((opt: CustomFieldOption) => {
+              const optionExists = response.votingCategories[categoryIndex].options.some(
+                existingOpt => existingOpt.optionName === opt.label
+              );
+              
+              if (!optionExists) {
+                const generatedId = generateMongoId();
+                response.votingCategories[categoryIndex].options.push({
+                  optionName: opt.label,
+                  votes: [],
+                  _id: generatedId
+                });
+              }
+            });
+            
+            // Then add user-added options
             userAddedOptions.forEach(optionValue => {
-              // First check if this option already exists in the category
               const optionExists = response.votingCategories[categoryIndex].options.some(
                 opt => opt.optionName === optionValue
               );
               
               if (!optionExists) {
-                // Generate a MongoDB-style ID to match existing _id format
                 const generatedId = generateMongoId();
                 response.votingCategories[categoryIndex].options.push({
                   optionName: optionValue,
-                  votes: [], // Start with empty votes
-                  _id: generatedId // Add _id field for consistency with backend
+                  votes: [],
+                  _id: generatedId
                 });
               }
             });
@@ -265,16 +330,23 @@ export const formatEventResponseData = (
             checkboxCategoryIndex = response.votingCategories.length - 1;
           }
           
-          // Track all user-added options, not just checked ones
-          const allUserOptions = [];
+          // Track ONLY user-added options
+          const userAddedCheckboxOptions: string[] = [];
           
           // Extract user options from the checkbox field response
           if (fieldResponse && typeof fieldResponse === 'object') {
             // If there's a userAddedOptions array, include all options from it
             if ('userAddedOptions' in fieldResponse && Array.isArray(fieldResponse.userAddedOptions)) {
               fieldResponse.userAddedOptions.forEach(option => {
-                if (option && typeof option === 'string' && option.trim() !== '' && !allUserOptions.includes(option)) {
-                  allUserOptions.push(option);
+                if (option && typeof option === 'string' && option.trim() !== '') {
+                  // Check if this option is not in the original field options
+                  const isOriginalOption = fieldData.options?.some(
+                    (opt: CustomFieldOption) => opt.label === option.trim()
+                  ) || false;
+                  
+                  if (!isOriginalOption && !userAddedCheckboxOptions.includes(option.trim())) {
+                    userAddedCheckboxOptions.push(option.trim());
+                  }
                 }
               });
             }
@@ -285,26 +357,46 @@ export const formatEventResponseData = (
               if (key === 'userAddedOptions') return;
               
               if (value === true) {
-                // Check if this is a user-added option (i.e., not found in original options)
-                const isUserOption = fieldData.options ? 
-                  !fieldData.options.some(opt => opt.id.toString() === key) : true;
+                // For user-added options, the key might be complex - extract the option name
+                const optionName = key.split('_').length > 1 ? key.split('_')[1] : key;
                 
-                if (isUserOption) {
-                  // The key here might be complex - extract proper option name
-                  // Check if it's a simple string that can be used as an option name
-                  const optionName = key.split('_').length > 1 ? key.split('_')[1] : key;
-                  
-                  if (!allUserOptions.includes(optionName)) {
-                    allUserOptions.push(optionName);
-                  }
+                // Check if this is not an original option
+                const isOriginalOption = fieldData.options?.some(
+                  (opt: CustomFieldOption) => opt.id.toString() === key || opt.label === optionName
+                ) || false;
+                
+                if (!isOriginalOption && !userAddedCheckboxOptions.includes(optionName)) {
+                  userAddedCheckboxOptions.push(optionName);
                 }
               }
             });
           }
           
-          // Add all user-added options to the category (regardless of if checked)
-          if (fieldData.allowUserAddOptions && allUserOptions.length > 0) {
-            allUserOptions.forEach(optionName => {
+          // Store ONLY user-added options in the new structure
+          if (userAddedCheckboxOptions.length > 0) {
+            response.suggestedOptions[fieldId] = userAddedCheckboxOptions;
+          }
+          
+          // Add all options (both original and user-added) to the category for voting purposes
+          // Add original options first
+          fieldData.options?.forEach((opt: CustomFieldOption) => {
+            const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
+              existingOpt => existingOpt.optionName === opt.label
+            );
+            
+            if (!optionExists) {
+              const generatedId = generateMongoId();
+              response.votingCategories[checkboxCategoryIndex].options.push({
+                optionName: opt.label,
+                votes: [],
+                _id: generatedId
+              });
+            }
+          });
+          
+          // Then add user-added options
+          if (fieldData.allowUserAddOptions && userAddedCheckboxOptions.length > 0) {
+            userAddedCheckboxOptions.forEach(optionName => {
               // Check if this option already exists in the category
               const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
                 opt => opt.optionName === optionName
@@ -330,7 +422,9 @@ export const formatEventResponseData = (
               if (key !== 'userAddedOptions' && isChecked === true) {
                 // For original options, get the label from the field definition
                 if (fieldData.options) {
-                  const originalOption = fieldData.options.find(opt => opt.id.toString() === key);
+                  const originalOption = fieldData.options.find(
+                    (opt: CustomFieldOption) => opt.id.toString() === key
+                  );
                   if (originalOption) {
                     checkedOptions.push(originalOption.label);
                     return;

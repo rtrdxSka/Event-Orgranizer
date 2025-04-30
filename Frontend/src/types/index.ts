@@ -240,9 +240,20 @@ export interface VotingOption {
 export interface EventResponseSuccess {
   status: string;
   data: {
-    response: EventResponseData;
+    response: {
+      eventId: string;
+      userId: string;
+      userEmail: string;
+      userName?: string;
+      fieldResponses: FieldResponse[];
+      suggestedDates: string[];
+      suggestedPlaces: string[];
+      suggestedOptions: Record<string, string[]>;  // New structure - category name to array of options
+      _id: string;
+      createdAt: string;
+      updatedAt: string;
+    };
     votingCategories: VotingCategory[];
-    isUpdate?: boolean;
   }
 }
 
@@ -269,4 +280,9 @@ export interface UserEventResponse {
   userSuggestedDates: string[];
   userSuggestedPlaces: string[];
   hasResponse: boolean;
+}
+
+export interface SuggestedOption {
+  categoryName: string;
+  optionName: string;
 }
