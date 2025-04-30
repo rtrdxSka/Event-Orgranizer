@@ -28,7 +28,8 @@ export const createEventResponseSchema = z.object({
   suggestedDates: z.array(z.string()).optional(),
   suggestedPlaces: z.array(z.string()).optional(),
   customFields: z.record(z.any()),
-  votingCategories: z.array(votingCategorySchema)
+  votingCategories: z.array(votingCategorySchema),
+  suggestedOptions: z.record(z.array(z.string())).optional() 
 });
 
 export type CreateEventResponseInput = z.infer<typeof createEventResponseSchema>;

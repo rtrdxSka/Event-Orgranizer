@@ -7,16 +7,25 @@ interface FieldResponse {
   response: any;
 }
 
+// Type definition for the MongoDB document
 export interface EventResponseDocument extends mongoose.Document {
   eventId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   userEmail: string;
-  // Store only the non-voting field responses
   fieldResponses: FieldResponse[];
+  
+  // Keep these two arrays for backward compatibility and ease of use
+  suggestedDates: string[];
+  suggestedPlaces: string[];
+  
+  // New structure: Map where keys are category names and values are arrays of option names
+  suggestedOptions: Record<string, string[]>;
+  
   createdAt: Date;
   updatedAt: Date;
 }
 
+// MongoDB schema definition
 const eventResponseSchema = new mongoose.Schema<EventResponseDocument>({
   eventId: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -39,6 +48,13 @@ const eventResponseSchema = new mongoose.Schema<EventResponseDocument>({
     type: { type: String, required: true },
     response: { type: mongoose.Schema.Types.Mixed }
   }],
+  suggestedDates: [String],
+  suggestedPlaces: [String],
+  suggestedOptions: {
+    type: Map,
+    of: [String],
+    default: () => new Map()
+  }
 }, {
   timestamps: true
 });
