@@ -48,11 +48,10 @@ export const submitEventResponseHandler = catchErrors(async (req: Request, res: 
   // Validate request data
   const validatedData = createEventResponseSchema.parse(req.body);
   
-  // Get user email from the authenticated user object
+  // Get user email and name from the authenticated user object
   const userEmail = req.userEmail;
   appAssert(userEmail, 400, "User email is required");
-
-
+  
   // Create or update event response
   const { response, event } = await createOrUpdateEventResponse(
     userId.toString(),
