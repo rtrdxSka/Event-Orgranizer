@@ -69,6 +69,11 @@ export const validateRadioField = (field: RadioField): string | true => {
   if (field.options.length < 2) {
     return "Radio fields must have at least 2 options";
   }
+
+  const labels = field.options.map(opt => opt.label.toLowerCase());
+  if (new Set(labels).size !== labels.length) {
+    return "Radio options cannot contain duplicate labels (case-insensitive)";
+  }
   
   return true;
 };
@@ -106,6 +111,11 @@ export const validateCheckboxField = (field: CheckboxField): string | true => {
   if (field.options.length < 1) {
     return "Checkbox fields must have at least 1 option";
   }
+
+  const labels = field.options.map(opt => opt.label.toLowerCase());
+  if (new Set(labels).size !== labels.length) {
+    return "Checkbox options cannot contain duplicate labels (case-insensitive)";
+  }
   
   return true;
 };
@@ -124,6 +134,11 @@ export type ListField = z.infer<typeof listFieldSchema>;
 // Additional validation for list fields
 export const validateListField = (field: ListField): string | true => {
   const nonEmptyValues = field.values.filter(v => v.trim() !== '');
+
+  const lowerCaseValues = nonEmptyValues.map(v => v.toLowerCase());
+  if (new Set(lowerCaseValues).size !== lowerCaseValues.length) {
+    return "List entries cannot contain duplicates";
+  }
   
   if (field.readonly) {
 
