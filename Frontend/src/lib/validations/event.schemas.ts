@@ -296,8 +296,40 @@ export const eventFormSchema = z.object({
 
 export type EventFormSchema = z.infer<typeof eventFormSchema>;
 
+// Add this function to validate field titles are unique across all fields
+export const validateUniqueFieldTitles = (formFields: FieldSchema[]): string | true => {
+  // Extract all titles and convert to lowercase for case-insensitive comparison
+  const fieldTitles = formFields.map(field => field.title.toLowerCase().trim());
+  
+  // Check if there are duplicates by comparing the length of the array to the size of a Set made from it
+  if (new Set(fieldTitles).size !== fieldTitles.length) {
+    // Find the duplicate titles
+    const duplicates = fieldTitles.filter((title, index) => 
+      fieldTitles.indexOf(title) !== index
+    );
+    
+    // Get the first duplicate to mention in the error message
+    const firstDuplicate = duplicates[0];
+    const originalTitle = formFields.find(f => f.title.toLowerCase().trim() === firstDuplicate)?.title;
+    
+    return `Duplicate field title found: "${originalTitle}". All field titles must be unique.`;
+  }
+  
+  return true;
+};
+
 // Validate the entire form
 export const validateForm = (data: EventFormSchema): string | true => {
+
+  // First validate that all field titles are unique
+  if (data.formFields.length > 0) {
+    const titleValidation = validateUniqueFieldTitles(data.formFields);
+    if (titleValidation !== true) {
+      return titleValidation;
+    }
+  }
+
+
   // Validate event dates
   const dateValidation = validateEventDates(data.eventDates);
   const placeValidation = validateEventPlaces(data.place);
