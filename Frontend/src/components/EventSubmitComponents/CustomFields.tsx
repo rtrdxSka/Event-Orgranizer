@@ -3,8 +3,9 @@ import { Controller, UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import SuggestionDropdown from './SuggestionDropdown';
 
 // Types for custom fields
 export type CustomFieldData = {
@@ -29,15 +30,22 @@ export type CustomFieldData = {
 interface CustomFieldProps {
   field: CustomFieldData;
   formMethods: UseFormReturn<any>;
+  suggestions?: string[]; // Added suggestions prop
 }
 
 // Text Field Component
 export const TextField: React.FC<CustomFieldProps> = ({ 
   field, 
-  formMethods 
+  formMethods,
+  suggestions 
 }) => {
   const { control } = formMethods;
   const fieldId = `customFields.${field.id}`;
+  
+  // Handle selecting a suggestion
+  const handleSelectSuggestion = (suggestion: string) => {
+    formMethods.setValue(fieldId, suggestion);
+  };
   
   return (
     <div className="bg-purple-800/30 rounded-lg p-4 mb-4">
@@ -63,6 +71,17 @@ export const TextField: React.FC<CustomFieldProps> = ({
           />
         )}
       />
+      
+      {/* Display suggestions dropdown if there are suggestions and field is not readonly */}
+      {!field.readonly && suggestions && suggestions.length > 0 && (
+        <SuggestionDropdown
+          fieldId={field.id}
+          fieldTitle={field.title}
+          suggestions={suggestions}
+          onSelect={handleSelectSuggestion}
+          type="custom"
+        />
+      )}
     </div>
   );
 };
@@ -70,7 +89,8 @@ export const TextField: React.FC<CustomFieldProps> = ({
 // Radio Field Component
 export const RadioField: React.FC<CustomFieldProps> = ({ 
   field, 
-  formMethods
+  formMethods,
+  suggestions
 }) => {
   const { control, setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
@@ -95,6 +115,38 @@ export const RadioField: React.FC<CustomFieldProps> = ({
   const allOptions = [...(field.options || []), ...userAddedOptions];
   const hasReachedMaxOptions = field.maxOptions && allOptions.length >= field.maxOptions;
 
+  // Handle selecting a suggestion
+  const handleSelectSuggestion = (suggestion: string) => {
+    // Check if suggestion already exists
+    const optionExists = allOptions.some(opt => 
+      opt.label.toLowerCase() === suggestion.toLowerCase()
+    );
+    
+    if (!optionExists && field.allowUserAddOptions && !hasReachedMaxOptions) {
+      // Add as a new option
+      const newId = Date.now();
+      const newUserOption = { id: newId, label: suggestion };
+      
+      // Update local state
+      setUserAddedOptions([...userAddedOptions, newUserOption]);
+      
+      // Update form state
+      const updatedUserOptions = [...(formValue.userAddedOptions || []), suggestion];
+      
+      setValue(fieldId, {
+        ...formValue,
+        value: suggestion, // Also select the newly added option
+        userAddedOptions: updatedUserOptions
+      });
+    } else if (optionExists) {
+      // If option already exists, just select it
+      setValue(fieldId, {
+        ...formValue,
+        value: suggestion
+      });
+    }
+  };
+  
   // Add a new option
   const handleAddOption = () => {
     if (newOption.trim() && field.allowUserAddOptions && !hasReachedMaxOptions) {
@@ -249,12 +301,27 @@ export const RadioField: React.FC<CustomFieldProps> = ({
           )}
         </div>
       )}
+      
+      {/* Suggestions from other users */}
+      {!field.readonly && suggestions && suggestions.length > 0 && (
+        <SuggestionDropdown
+          fieldId={field.id}
+          fieldTitle={field.title}
+          suggestions={suggestions}
+          onSelect={handleSelectSuggestion}
+          type="custom"
+        />
+      )}
     </div>
   );
 };
 
 // Improved Checkbox Field Component
-export const CheckboxField: React.FC<CustomFieldProps> = ({ field, formMethods }) => {
+export const CheckboxField: React.FC<CustomFieldProps> = ({ 
+  field, 
+  formMethods,
+  suggestions 
+}) => {
   const { setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
   const [newOption, setNewOption] = useState('');
@@ -276,6 +343,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({ field, formMethods }
       setUserAddedOptions(options);
     }
   }, [watch(fieldId)]);
+  
   // Calculate if we've reached max options
   const allOptions = [
     ...(field.options || []),
@@ -343,6 +411,48 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({ field, formMethods }
     const updatedFormValue = { ...formValue };
     updatedFormValue[optionId] = checked;
     setValue(fieldId, updatedFormValue);
+  };
+  
+  // Handle selecting a suggestion from other users
+  const handleSelectSuggestion = (suggestion: string) => {
+    // Check if the suggestion already exists
+    const optionExists = allOptions.some(opt => 
+      opt.label.toLowerCase() === suggestion.toLowerCase()
+    );
+    
+    if (!optionExists && field.allowUserAddOptions && !hasReachedMaxOptions) {
+      // Create a stable ID for this option
+      const optionId = `user_${suggestion.replace(/\s+/g, '_').toLowerCase()}`;
+      
+      // Add to local state
+      const newUserOption = { id: optionId, label: suggestion };
+      setUserAddedOptions([...userAddedOptions, newUserOption]);
+      
+      // Update form value - add to userAddedOptions array and initialize as checked
+      const updatedUserOptions = [...(formValue.userAddedOptions || []), suggestion];
+      const updatedFormValue = {
+        ...formValue,
+        userAddedOptions: updatedUserOptions
+      };
+      updatedFormValue[optionId] = true; // Initialize as checked
+      
+      setValue(fieldId, updatedFormValue);
+    } else if (optionExists) {
+      // If option already exists, find its ID
+      const existingOption = allOptions.find(opt => 
+        opt.label.toLowerCase() === suggestion.toLowerCase()
+      );
+      
+      if (existingOption) {
+        const optionId = typeof existingOption.id === 'number' 
+          ? existingOption.id.toString() 
+          : existingOption.id;
+        
+        // Toggle the checkbox
+        const currentValue = formValue[optionId] || false;
+        handleCheckboxChange(optionId, !currentValue);
+      }
+    }
   };
   
   return (
@@ -445,12 +555,27 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({ field, formMethods }
           )}
         </div>
       )}
+      
+      {/* Suggestions from other users */}
+      {!field.readonly && suggestions && suggestions.length > 0 && (
+        <SuggestionDropdown
+          fieldId={field.id}
+          fieldTitle={field.title}
+          suggestions={suggestions}
+          onSelect={handleSelectSuggestion}
+          type="custom"
+        />
+      )}
     </div>
   );
 };
 
 // Improved List Field Component
-export const ListField: React.FC<CustomFieldProps> = ({ field, formMethods }) => {
+export const ListField: React.FC<CustomFieldProps> = ({ 
+  field, 
+  formMethods, 
+  suggestions 
+}) => {
   const { setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
   
@@ -506,6 +631,22 @@ export const ListField: React.FC<CustomFieldProps> = ({ field, formMethods }) =>
       const newValues = [...formValues];
       newValues.splice(index, 1);
       setValue(fieldId, newValues);
+    }
+  };
+  
+  // Handle selecting a suggestion from other users
+  const handleSelectSuggestion = (suggestion: string) => {
+    // Only add if we haven't reached max entries and user can add entries
+    if (canUserAdd && !hasReachedMaxEntries) {
+      // Check if suggestion already exists in the list
+      const suggestionExists = formValues.some(value => 
+        value.toLowerCase() === suggestion.toLowerCase()
+      );
+      
+      if (!suggestionExists) {
+        // Add the suggestion to the list
+        setValue(fieldId, [...formValues, suggestion]);
+      }
     }
   };
   
@@ -587,6 +728,17 @@ export const ListField: React.FC<CustomFieldProps> = ({ field, formMethods }) =>
             <Plus className="h-4 w-4 mr-2" />
             Add Item
           </Button>
+        )}
+        
+        {/* Suggestions from other users */}
+        {canUserAdd && suggestions && suggestions.length > 0 && !hasReachedMaxEntries && (
+          <SuggestionDropdown
+            fieldId={field.id}
+            fieldTitle={field.title}
+            suggestions={suggestions}
+            onSelect={handleSelectSuggestion}
+            type="custom"
+          />
         )}
         
         {/* Messages */}
