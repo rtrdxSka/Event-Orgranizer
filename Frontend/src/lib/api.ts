@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse, OtherUserResponsesData } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -83,5 +83,13 @@ export const getUserEventResponse = async (eventId: string): Promise<{
   data: UserEventResponse;
 }> => {
   const response = await API.get(`/event/${eventId}/response`);
+  return response;
+};
+
+export const getOtherUserSuggestions = async (eventId: string): Promise<{
+  status: string;
+  data: OtherUserResponsesData;
+}> => {
+  const response = await API.get(`/event/${eventId}/other-responses`);
   return response;
 };

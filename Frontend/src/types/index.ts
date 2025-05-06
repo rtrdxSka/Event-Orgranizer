@@ -286,3 +286,16 @@ export interface SuggestedOption {
   categoryName: string;
   optionName: string;
 }
+
+export interface OtherUserResponsesData {
+  event: {
+    _id: string;
+    name: string;
+    description: string;
+  };
+  uniqueSuggestions: {
+    dates: string[];
+    places: string[];
+    customFields: Record<string, string[]>;
+  };
+}
