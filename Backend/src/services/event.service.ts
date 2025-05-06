@@ -577,3 +577,172 @@ export const getEventResponses = async (eventId: string) => {
     responses
   };
 };
+
+
+//fetch other user responses
+
+export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
+  // Verify event exists
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+
+  // Get all responses for this event except the current user's
+  const otherResponses = await EventResponseModel.find({
+    eventId,
+    userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+  }).populate('userId', 'email name');
+
+  // Get current user's response for filtering
+  const currentUserResponse = await EventResponseModel.findOne({
+    eventId,
+    userId: currentUserId
+  });
+
+  // Extract unique suggestions from all responses
+  const uniqueSuggestions = {
+    dates: new Set<string>(),
+    places: new Set<string>(),
+    customFields: {} as Record<string, Set<string>>
+  };
+
+  // Filter function to check if a suggestion already exists in user's response
+  const isUniqueDate = (date: string) => {
+    if (!currentUserResponse || !currentUserResponse.suggestedDates.includes(date)) {
+      if (event.eventDates?.dates && !event.eventDates.dates.includes(date)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const isUniquePlace = (place: string) => {
+    if (!currentUserResponse || !currentUserResponse.suggestedPlaces.includes(place)) {
+      if (event.eventPlaces?.places && !event.eventPlaces.places.includes(place)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Process all other users' responses
+  otherResponses.forEach(response => {
+    // Process dates
+    response.suggestedDates.forEach(date => {
+      if (isUniqueDate(date)) {
+        uniqueSuggestions.dates.add(date);
+      }
+    });
+
+    // Process places
+    response.suggestedPlaces.forEach(place => {
+      if (isUniquePlace(place)) {
+        uniqueSuggestions.places.add(place);
+      }
+    });
+
+    // Process custom field responses
+    response.fieldResponses.forEach(fieldResponse => {
+      const { fieldId, type, response: fieldValue } = fieldResponse;
+      
+      // Only process relevant field types
+      if (type === 'list' && Array.isArray(fieldValue)) {
+        if (!uniqueSuggestions.customFields[fieldId]) {
+          uniqueSuggestions.customFields[fieldId] = new Set<string>();
+        }
+        
+        // Add each unique list item
+        fieldValue.forEach(value => {
+          if (typeof value === 'string' && value.trim() !== '') {
+            // Check if this value is unique compared to current user's response
+            let isUnique = true;
+            
+            if (currentUserResponse) {
+              const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
+              if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
+                if (userFieldResponse.response.includes(value)) {
+                  isUnique = false;
+                }
+              }
+            }
+            
+            if (isUnique) {
+              uniqueSuggestions.customFields[fieldId].add(value);
+            }
+          }
+        });
+      }
+    });
+
+    // Process suggested options from other users (for voting categories)
+    if (response.suggestedOptions) {
+      for (const [categoryKey, options] of Object.entries(response.suggestedOptions)) {
+        if (Array.isArray(options)) {
+          // Skip date and place categories as they're already processed
+          if (categoryKey === 'date' || categoryKey === 'place') continue;
+          
+          // IMPORTANT: This section needs to properly identify field keys
+          // Find the correct field key for this category
+          let fieldKeyToUse = categoryKey;
+          
+          // If categoryKey is not a direct field key, try to find the matching field
+          if (!uniqueSuggestions.customFields[categoryKey]) {
+            // Look through event.customFields to find field with matching title
+            for (const [fieldKey, fieldValue] of event.customFields.entries()) {
+              if (fieldValue.title === categoryKey) {
+                fieldKeyToUse = fieldKey;
+                break;
+              }
+            }
+          }
+          
+          // Initialize set for this field if needed
+          if (!uniqueSuggestions.customFields[fieldKeyToUse]) {
+            uniqueSuggestions.customFields[fieldKeyToUse] = new Set<string>();
+          }
+          
+          options.forEach(option => {
+            if (typeof option === 'string' && option.trim() !== '') {
+              // Check if this option is unique compared to current user's response
+              let isUnique = true;
+              
+              if (currentUserResponse && currentUserResponse.suggestedOptions) {
+                const userOptions = currentUserResponse.suggestedOptions[categoryKey];
+                if (Array.isArray(userOptions) && userOptions.includes(option)) {
+                  isUnique = false;
+                }
+              }
+              
+              // Check if option already exists in voting categories
+              const categoryExists = event.votingCategories.some(cat => 
+                cat.categoryName === categoryKey && 
+                cat.options.some(opt => opt.optionName === option)
+              );
+              
+              if (isUnique && !categoryExists) {
+                uniqueSuggestions.customFields[fieldKeyToUse].add(option);
+              }
+            }
+          });
+        }
+      }
+    }
+  });
+
+  // Convert Sets to arrays for the response
+  return {
+    event: {
+      _id: event._id,
+      name: event.name,
+      description: event.description
+    },
+    uniqueSuggestions: {
+      dates: Array.from(uniqueSuggestions.dates),
+      places: Array.from(uniqueSuggestions.places),
+      customFields: Object.fromEntries(
+        Object.entries(uniqueSuggestions.customFields).map(([key, valueSet]) => 
+          [key, Array.from(valueSet)]
+        )
+      )
+    }
+  };
+};
