@@ -581,6 +581,172 @@ export const getEventResponses = async (eventId: string) => {
 
 //fetch other user responses
 
+// export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
+//   // Verify event exists
+//   const event = await EventModel.findById(eventId);
+//   appAssert(event, NOT_FOUND, "Event not found");
+
+//   // Get all responses for this event except the current user's
+//   const otherResponses = await EventResponseModel.find({
+//     eventId,
+//     userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+//   }).populate('userId', 'email name');
+
+//   // Get current user's response for filtering
+//   const currentUserResponse = await EventResponseModel.findOne({
+//     eventId,
+//     userId: currentUserId
+//   });
+
+//   // Extract unique suggestions from all responses
+//   const uniqueSuggestions = {
+//     dates: new Set<string>(),
+//     places: new Set<string>(),
+//     customFields: {} as Record<string, Set<string>>
+//   };
+
+//   // Filter function to check if a suggestion already exists in user's response
+//   const isUniqueDate = (date: string) => {
+//     if (!currentUserResponse || !currentUserResponse.suggestedDates.includes(date)) {
+//       if (event.eventDates?.dates && !event.eventDates.dates.includes(date)) {
+//         return true;
+//       }
+//     }
+//     return false;
+//   };
+
+//   const isUniquePlace = (place: string) => {
+//     if (!currentUserResponse || !currentUserResponse.suggestedPlaces.includes(place)) {
+//       if (event.eventPlaces?.places && !event.eventPlaces.places.includes(place)) {
+//         return true;
+//       }
+//     }
+//     return false;
+//   };
+
+//   // Process all other users' responses
+//   otherResponses.forEach(response => {
+//     // Process dates
+//     response.suggestedDates.forEach(date => {
+//       if (isUniqueDate(date)) {
+//         uniqueSuggestions.dates.add(date);
+//       }
+//     });
+
+//     // Process places
+//     response.suggestedPlaces.forEach(place => {
+//       if (isUniquePlace(place)) {
+//         uniqueSuggestions.places.add(place);
+//       }
+//     });
+
+//     // Process custom field responses
+//     response.fieldResponses.forEach(fieldResponse => {
+//       const { fieldId, type, response: fieldValue } = fieldResponse;
+      
+//       // Only process relevant field types
+//       if (type === 'list' && Array.isArray(fieldValue)) {
+//         if (!uniqueSuggestions.customFields[fieldId]) {
+//           uniqueSuggestions.customFields[fieldId] = new Set<string>();
+//         }
+        
+//         // Add each unique list item
+//         fieldValue.forEach(value => {
+//           if (typeof value === 'string' && value.trim() !== '') {
+//             // Check if this value is unique compared to current user's response
+//             let isUnique = true;
+            
+//             if (currentUserResponse) {
+//               const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
+//               if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
+//                 if (userFieldResponse.response.includes(value)) {
+//                   isUnique = false;
+//                 }
+//               }
+//             }
+            
+//             if (isUnique) {
+//               uniqueSuggestions.customFields[fieldId].add(value);
+//             }
+//           }
+//         });
+//       }
+//     });
+
+//     // Process suggested options from other users (for voting categories)
+//     if (response.suggestedOptions) {
+//       for (const [categoryKey, options] of Object.entries(response.suggestedOptions)) {
+//         if (Array.isArray(options)) {
+//           // Skip date and place categories as they're already processed
+//           if (categoryKey === 'date' || categoryKey === 'place') continue;
+          
+//           // IMPORTANT: This section needs to properly identify field keys
+//           // Find the correct field key for this category
+//           let fieldKeyToUse = categoryKey;
+          
+//           // If categoryKey is not a direct field key, try to find the matching field
+//           if (!uniqueSuggestions.customFields[categoryKey]) {
+//             // Look through event.customFields to find field with matching title
+//             for (const [fieldKey, fieldValue] of event.customFields.entries()) {
+//               if (fieldValue.title === categoryKey) {
+//                 fieldKeyToUse = fieldKey;
+//                 break;
+//               }
+//             }
+//           }
+          
+//           // Initialize set for this field if needed
+//           if (!uniqueSuggestions.customFields[fieldKeyToUse]) {
+//             uniqueSuggestions.customFields[fieldKeyToUse] = new Set<string>();
+//           }
+          
+//           options.forEach(option => {
+//             if (typeof option === 'string' && option.trim() !== '') {
+//               // Check if this option is unique compared to current user's response
+//               let isUnique = true;
+              
+//               if (currentUserResponse && currentUserResponse.suggestedOptions) {
+//                 const userOptions = currentUserResponse.suggestedOptions[categoryKey];
+//                 if (Array.isArray(userOptions) && userOptions.includes(option)) {
+//                   isUnique = false;
+//                 }
+//               }
+              
+//               // Check if option already exists in voting categories
+//               const categoryExists = event.votingCategories.some(cat => 
+//                 cat.categoryName === categoryKey && 
+//                 cat.options.some(opt => opt.optionName === option)
+//               );
+              
+//               if (isUnique && !categoryExists) {
+//                 uniqueSuggestions.customFields[fieldKeyToUse].add(option);
+//               }
+//             }
+//           });
+//         }
+//       }
+//     }
+//   });
+
+//   // Convert Sets to arrays for the response
+//   return {
+//     event: {
+//       _id: event._id,
+//       name: event.name,
+//       description: event.description
+//     },
+//     uniqueSuggestions: {
+//       dates: Array.from(uniqueSuggestions.dates),
+//       places: Array.from(uniqueSuggestions.places),
+//       customFields: Object.fromEntries(
+//         Object.entries(uniqueSuggestions.customFields).map(([key, valueSet]) => 
+//           [key, Array.from(valueSet)]
+//         )
+//       )
+//     }
+//   };
+// };
+
 export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
   // Verify event exists
   const event = await EventModel.findById(eventId);
@@ -624,6 +790,12 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
     return false;
   };
 
+  // Define the interface for field options
+  interface FieldOption {
+    id: number;
+    label: string;
+  }
+
   // Process all other users' responses
   otherResponses.forEach(response => {
     // Process dates
@@ -640,7 +812,7 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
       }
     });
 
-    // Process custom field responses
+    // Process custom field responses for list type
     response.fieldResponses.forEach(fieldResponse => {
       const { fieldId, type, response: fieldValue } = fieldResponse;
       
@@ -673,57 +845,59 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
       }
     });
 
-    // Process suggested options from other users (for voting categories)
+    // Process suggested options from other users (for radio and checkbox fields)
+    // We need a different approach since suggestedOptions isn't a regular object
     if (response.suggestedOptions) {
-      for (const [categoryKey, options] of Object.entries(response.suggestedOptions)) {
-        if (Array.isArray(options)) {
-          // Skip date and place categories as they're already processed
-          if (categoryKey === 'date' || categoryKey === 'place') continue;
+      // Get just the JSON data of suggestedOptions to avoid Mongoose internal properties
+      try {
+        // Try to get the data as a plain object
+        const plainObj = JSON.parse(JSON.stringify(response.suggestedOptions));
+        
+        // Process each field ID
+        for (const fieldId in plainObj) {
+          // Skip date and place categories
+          if (fieldId === 'date' || fieldId === 'place') continue;
           
-          // IMPORTANT: This section needs to properly identify field keys
-          // Find the correct field key for this category
-          let fieldKeyToUse = categoryKey;
-          
-          // If categoryKey is not a direct field key, try to find the matching field
-          if (!uniqueSuggestions.customFields[categoryKey]) {
-            // Look through event.customFields to find field with matching title
-            for (const [fieldKey, fieldValue] of event.customFields.entries()) {
-              if (fieldValue.title === categoryKey) {
-                fieldKeyToUse = fieldKey;
-                break;
-              }
+          // Ensure this is a real field ID in our event
+          if (event.customFields && event.customFields.has(fieldId)) {
+            const options = plainObj[fieldId];
+            
+            // Initialize set for this field if needed
+            if (!uniqueSuggestions.customFields[fieldId]) {
+              uniqueSuggestions.customFields[fieldId] = new Set<string>();
             }
-          }
-          
-          // Initialize set for this field if needed
-          if (!uniqueSuggestions.customFields[fieldKeyToUse]) {
-            uniqueSuggestions.customFields[fieldKeyToUse] = new Set<string>();
-          }
-          
-          options.forEach(option => {
-            if (typeof option === 'string' && option.trim() !== '') {
-              // Check if this option is unique compared to current user's response
-              let isUnique = true;
-              
-              if (currentUserResponse && currentUserResponse.suggestedOptions) {
-                const userOptions = currentUserResponse.suggestedOptions[categoryKey];
-                if (Array.isArray(userOptions) && userOptions.includes(option)) {
-                  isUnique = false;
+            
+            // Process each option
+            if (Array.isArray(options)) {
+              options.forEach(option => {
+                if (typeof option === 'string' && option.trim()) {
+                  // Check if option is already in user's suggestions
+                  let alreadyInUserSuggestions = false;
+                  if (currentUserResponse?.suggestedOptions) {
+                    const userSuggestions = JSON.parse(JSON.stringify(currentUserResponse.suggestedOptions));
+                    if (userSuggestions[fieldId] && Array.isArray(userSuggestions[fieldId])) {
+                      alreadyInUserSuggestions = userSuggestions[fieldId].includes(option);
+                    }
+                  }
+                  
+                  // Check if option is an original field option
+                  const fieldDef = event.customFields.get(fieldId);
+                  let isOriginalOption = false;
+                  if (fieldDef?.options && Array.isArray(fieldDef.options)) {
+                    isOriginalOption = fieldDef.options.some((opt: FieldOption) => opt.label === option);
+                  }
+                  
+                  // Add if it's a unique user suggestion
+                  if (!alreadyInUserSuggestions && !isOriginalOption) {
+                    uniqueSuggestions.customFields[fieldId].add(option);
+                  }
                 }
-              }
-              
-              // Check if option already exists in voting categories
-              const categoryExists = event.votingCategories.some(cat => 
-                cat.categoryName === categoryKey && 
-                cat.options.some(opt => opt.optionName === option)
-              );
-              
-              if (isUnique && !categoryExists) {
-                uniqueSuggestions.customFields[fieldKeyToUse].add(option);
-              }
+              });
             }
-          });
+          }
         }
+      } catch (error) {
+        console.error('Error processing suggestedOptions:', error);
       }
     }
   });
