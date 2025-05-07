@@ -93,3 +93,15 @@ export const getOtherUserSuggestions = async (eventId: string): Promise<{
   const response = await API.get(`/event/${eventId}/other-responses`);
   return response;
 };
+
+// Get events created by current user
+export const getUserCreatedEvents = async (): Promise<EventGet[]> => {
+  const response = await API.get('/event/created');
+  return response.data;
+};
+
+// Get events user has responded to
+export const getUserRespondedEvents = async (): Promise<EventGet[]> => {
+  const response = await API.get('/event/responded');
+  return response.data;
+};
