@@ -12,6 +12,7 @@ import Profile from "./pages/Profile"
 import { setNavigate } from "./lib/navigation"
 import CreateEvent from "./pages/CreateEvent"
 import EventSubmit from "./pages/EventSubmit"
+import MyEvents from "./pages/MyEvents"
 
 
 function App() {
@@ -46,6 +47,15 @@ function App() {
         element={
           <ProtectedRoute>
             <EventSubmit />
+          </ProtectedRoute>
+        } 
+      />
+
+        <Route 
+        path="/events" 
+        element={
+          <ProtectedRoute>
+            <MyEvents/>
           </ProtectedRoute>
         } 
       />
