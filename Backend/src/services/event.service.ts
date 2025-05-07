@@ -920,3 +920,88 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
     }
   };
 };
+
+
+/**
+ * Get events created by a specific user with response count
+ */
+export const getUserCreatedEvents = async (userId: string) => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(
+    userExists,
+    NOT_FOUND,
+    "User not found"
+  );
+
+  // Find all events created by the user
+  const events = await EventModel.find({ 
+    createdBy: new mongoose.Types.ObjectId(userId) 
+  }).sort({ createdAt: -1 });
+
+  // For each event, count responses (excluding the creator)
+  const eventsWithResponseCounts = await Promise.all(events.map(async (event) => {
+    const responseCount = await EventResponseModel.countDocuments({ 
+      eventId: event._id,
+      userId: { $ne: new mongoose.Types.ObjectId(userId) } // Exclude creator's responses
+    });
+
+    // Convert to plain object so we can add the response count
+    const eventObj = event.toObject();
+    return {
+      ...eventObj,
+      otherResponsesCount: responseCount
+    };
+  }));
+
+  return eventsWithResponseCounts;
+};
+
+/**
+ * Get events that a user has responded to
+ */
+export const getUserRespondedEvents = async (userId: string) => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(
+    userExists,
+    NOT_FOUND,
+    "User not found"
+  );
+
+  // Find all event responses by this user
+  const responses = await EventResponseModel.find({ 
+    userId: new mongoose.Types.ObjectId(userId) 
+  });
+  
+  // Extract the eventIds
+  const eventIds = responses.map(response => response.eventId);
+  
+  // Fetch the actual events
+  const events = await EventModel.find({ 
+    _id: { $in: eventIds } 
+  }).sort({ createdAt: -1 });
+
+  // For each event, count responses (excluding the current user)
+  const eventsWithResponseCounts = await Promise.all(events.map(async (event) => {
+    const responseCount = await EventResponseModel.countDocuments({ 
+      eventId: event._id,
+      userId: { $ne: new mongoose.Types.ObjectId(userId) } // Exclude current user's response
+    });
+
+    // Convert to plain object so we can add the response count
+    const eventObj = event.toObject();
+    return {
+      ...eventObj,
+      otherResponsesCount: responseCount
+    };
+  }));
+
+  return eventsWithResponseCounts;
+};

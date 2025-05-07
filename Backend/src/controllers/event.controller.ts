@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getOtherUserResponses, getUserEventResponse } from "../services/event.service";
+import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
@@ -108,5 +108,29 @@ export const getOtherUserResponsesHandler = catchErrors(async (req: Request, res
   return res.status(OK).json({
     status: "success",
     data
+  });
+});
+
+export const getUserCreatedEventsHandler = catchErrors(async (req: Request, res: Response) => {
+  const userId = req.userId.toString();
+  
+  // Call the service function
+  const events = await getUserCreatedEvents(userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: events
+  });
+});
+
+export const getUserRespondedEventsHandler = catchErrors(async (req: Request, res: Response) => {
+  const userId = req.userId.toString();
+  
+  // Call the service function
+  const events = await getUserRespondedEvents(userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: events
   });
 });
