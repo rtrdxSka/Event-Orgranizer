@@ -1,4 +1,3 @@
-// Final fixed version of formatEventResponseData with improved field matching
 import { EventData } from "@/lib/validations/eventSubmit.schemas";
 
 // Helper function to generate MongoDB-like ID
@@ -45,6 +44,16 @@ function findFieldByTitle(customFields: Record<string, any>, title: string): Cus
   return undefined;
 }
 
+// Helper function to check if an option is user-added (not in original options)
+function isUserAddedOption(optionName: string, fieldOptions?: CustomFieldOption[]): boolean {
+  if (!fieldOptions || fieldOptions.length === 0) {
+    return true; // If no original options, consider it user-added
+  }
+  
+  // Check if this option exists in the original field options
+  return !fieldOptions.some(opt => opt.label.toLowerCase() === optionName.toLowerCase());
+}
+
 export const formatEventResponseData = (
   event: EventData,
   userId: string,
@@ -66,7 +75,7 @@ export const formatEventResponseData = (
     userName,
 
     // Start with a copy of the event's voting categories
-    votingCategories: JSON.parse(JSON.stringify(event.votingCategories)),
+    votingCategories: JSON.parse(JSON.stringify(event.votingCategories || [])),
     
     // For non-voting fields
     fieldResponses: [],
@@ -85,6 +94,11 @@ export const formatEventResponseData = (
   );
 
   if (dateCategoryIndex !== -1 && Array.isArray(suggestedDates)) {
+    // First, remove user's vote from all date options
+    response.votingCategories[dateCategoryIndex].options.forEach(option => {
+      option.votes = option.votes.filter(id => id !== userId);
+    });
+    
     // Add all suggested dates as options (regardless of voting)
     suggestedDates.forEach(dateStr => {
       const exists = response.votingCategories[dateCategoryIndex].options.some(
@@ -95,7 +109,7 @@ export const formatEventResponseData = (
         const generatedId = generateMongoId();
         response.votingCategories[dateCategoryIndex].options.push({
           optionName: dateStr,
-          votes: [],
+          votes: [], // Start with empty votes, we'll add later if voted
           _id: generatedId
         });
       }
@@ -123,6 +137,11 @@ export const formatEventResponseData = (
   );
 
   if (placeCategoryIndex !== -1 && Array.isArray(suggestedPlaces)) {
+    // First, remove user's vote from all place options
+    response.votingCategories[placeCategoryIndex].options.forEach(option => {
+      option.votes = option.votes.filter(id => id !== userId);
+    });
+    
     // Add all suggested places as options (regardless of voting)
     suggestedPlaces.forEach(place => {
       const exists = response.votingCategories[placeCategoryIndex].options.some(
@@ -133,7 +152,7 @@ export const formatEventResponseData = (
         const generatedId = generateMongoId();
         response.votingCategories[placeCategoryIndex].options.push({
           optionName: place,
-          votes: [],
+          votes: [], // Start with empty votes, we'll add later if voted
           _id: generatedId
         });
       }
@@ -155,6 +174,15 @@ export const formatEventResponseData = (
     });
   }
 
+  // Store user-suggested dates and places in the new structure
+  if (Array.isArray(suggestedDates) && suggestedDates.length > 0) {
+    response.suggestedOptions["date"] = suggestedDates;
+  }
+  
+  if (Array.isArray(suggestedPlaces) && suggestedPlaces.length > 0) {
+    response.suggestedOptions["place"] = suggestedPlaces;
+  }
+
   // Process custom fields
   if (event.customFields && Object.keys(event.customFields).length > 0) {
     // Iterate through each custom field
@@ -173,8 +201,6 @@ export const formatEventResponseData = (
       switch (fieldData.type) {
         case 'text':
           // For text fields, simply add a field response
-          if (fieldData.readonly) continue;
-          
           if (fieldResponse !== undefined && fieldResponse !== "") {
             response.fieldResponses.push({
               fieldId,
@@ -186,8 +212,6 @@ export const formatEventResponseData = (
           
         case 'list':
           // For list fields, include ONLY user-added values
-          if (fieldData.readonly) continue;
-          
           const originalValues = fieldData.values || [];
           const listValues = Array.isArray(fieldResponse) ? fieldResponse : [fieldResponse];
           
@@ -204,114 +228,111 @@ export const formatEventResponseData = (
           }
           break;
           
-        case 'radio':
-          // For radio fields, find the right category by field title
-          let categoryIndex = response.votingCategories.findIndex(
-            c => c.categoryName === fieldData.title || c.categoryName === fieldId
-          );
+case 'radio':
+  // For radio fields, find the right category by field title
+  let categoryIndex = response.votingCategories.findIndex(
+    c => c.categoryName === fieldData.title || c.categoryName === fieldId
+  );
+  
+  if (categoryIndex === -1) {
+    // Create new category if it doesn't exist
+    const categoryId = generateMongoId();
+    response.votingCategories.push({
+      categoryName: fieldData.title || fieldId,
+      options: [],
+      _id: categoryId
+    });
+    categoryIndex = response.votingCategories.length - 1;
+  }
+  
+  // First, clear user's vote from all options in this category
+  response.votingCategories[categoryIndex].options.forEach(option => {
+    option.votes = option.votes.filter(id => id !== userId);
+  });
+  
+  // Track ONLY user-added options
+  const userAddedOptions: string[] = [];
+  
+  // Get the selected value for voting
+  const selectedValue = typeof fieldResponse === 'object' ? fieldResponse.value : fieldResponse;
+  
+  // Check if there's a userAddedOptions property in the response
+  if (fieldResponse && typeof fieldResponse === 'object' && 'userAddedOptions' in fieldResponse) {
+    // If there's a userAddedOptions array, include all options from it
+    const userOptions = fieldResponse.userAddedOptions || [];
+    if (Array.isArray(userOptions)) {
+      userOptions.forEach(option => {
+        if (option && typeof option === 'string' && option.trim() !== '') {
+          // Check if this option is not in the original field options
+          const isOriginalOption = fieldData.options?.some(
+            (opt: CustomFieldOption) => opt.label.toLowerCase() === option.trim().toLowerCase()
+          ) || false;
           
-          if (categoryIndex === -1) {
-            // Create new category if it doesn't exist
-            const categoryId = generateMongoId();
-            response.votingCategories.push({
-              categoryName: fieldData.title || fieldId,
-              options: [],
-              _id: categoryId
-            });
-            categoryIndex = response.votingCategories.length - 1;
+          if (!isOriginalOption) {
+            userAddedOptions.push(option.trim());
           }
-          
-          // Track ONLY user-added options
-          let userAddedOptions: string[] = [];
-          
-          // Check if there's a userAddedOptions property in the response
-          if (fieldResponse && typeof fieldResponse === 'object' && 'userAddedOptions' in fieldResponse) {
-            // If there's a userAddedOptions array, include all options from it
-            const userOptions = fieldResponse.userAddedOptions || [];
-            if (Array.isArray(userOptions)) {
-              userOptions.forEach(option => {
-                if (option && typeof option === 'string' && option.trim() !== '') {
-                  // Check if this option is not in the original field options
-                  const isOriginalOption = fieldData.options?.some(
-                    (opt: CustomFieldOption) => opt.label === option.trim()
-                  ) || false;
-                  
-                  if (!isOriginalOption) {
-                    userAddedOptions.push(option.trim());
-                  }
-                }
-              });
-            }
-          }
-          
-          // Also check if the selected option itself is a user-added option
-          const selectedValue = typeof fieldResponse === 'object' ? fieldResponse.value : fieldResponse;
-          if (selectedValue && typeof selectedValue === 'string' && selectedValue.trim() !== '') {
-            // Check if it's not one of the original options
-            const isOriginalOption = fieldData.options?.some(
-              (opt: CustomFieldOption) => opt.label === selectedValue.trim()
-            ) || false;
-              
-            if (!isOriginalOption && !userAddedOptions.includes(selectedValue.trim())) {
-              userAddedOptions.push(selectedValue.trim());
-            }
-          }
-          
-          // Store ONLY user-added options in the new structure
-          if (userAddedOptions.length > 0) {
-            response.suggestedOptions[fieldId] = userAddedOptions;
-          }
-          
-          // Add all options (both original and user-added) to the category for voting purposes
-          if (fieldData.allowUserAddOptions) {
-            // Add original options first
-            fieldData.options?.forEach((opt: CustomFieldOption) => {
-              const optionExists = response.votingCategories[categoryIndex].options.some(
-                existingOpt => existingOpt.optionName === opt.label
-              );
-              
-              if (!optionExists) {
-                const generatedId = generateMongoId();
-                response.votingCategories[categoryIndex].options.push({
-                  optionName: opt.label,
-                  votes: [],
-                  _id: generatedId
-                });
-              }
-            });
-            
-            // Then add user-added options
-            userAddedOptions.forEach(optionValue => {
-              const optionExists = response.votingCategories[categoryIndex].options.some(
-                opt => opt.optionName === optionValue
-              );
-              
-              if (!optionExists) {
-                const generatedId = generateMongoId();
-                response.votingCategories[categoryIndex].options.push({
-                  optionName: optionValue,
-                  votes: [],
-                  _id: generatedId
-                });
-              }
-            });
-          }
-          
-          // Add vote if user selected this option
-          if (selectedValue) {
-            const optionIndex = response.votingCategories[categoryIndex].options.findIndex(
-              opt => opt.optionName === selectedValue
-            );
-            
-            if (optionIndex !== -1) {
-              // Add user to votes array if not already there
-              const votes = response.votingCategories[categoryIndex].options[optionIndex].votes;
-              if (!votes.includes(userId)) {
-                votes.push(userId);
-              }
-            }
-          }
-          break;
+        }
+      });
+    }
+  }
+  
+  // Store ONLY user-added options in the new structure
+  if (userAddedOptions.length > 0) {
+    response.suggestedOptions[fieldId] = userAddedOptions;
+  }
+  
+  // Make sure all options exist in the category (both original and user-added)
+  // First make sure all original options are in the category
+  if (fieldData.options && fieldData.options.length > 0) {
+    fieldData.options.forEach((opt: CustomFieldOption) => {
+      const optionExists = response.votingCategories[categoryIndex].options.some(
+        existingOpt => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
+      );
+      
+      if (!optionExists) {
+        const generatedId = generateMongoId();
+        response.votingCategories[categoryIndex].options.push({
+          optionName: opt.label,
+          votes: [], // Start with no votes
+          _id: generatedId
+        });
+      }
+    });
+  }
+  
+  // Then add user-added options
+  if (fieldData.allowUserAddOptions && userAddedOptions.length > 0) {
+    userAddedOptions.forEach(optionValue => {
+      const optionExists = response.votingCategories[categoryIndex].options.some(
+        opt => opt.optionName.toLowerCase() === optionValue.toLowerCase()
+      );
+      
+      if (!optionExists) {
+        const generatedId = generateMongoId();
+        response.votingCategories[categoryIndex].options.push({
+          optionName: optionValue,
+          votes: [], // Start with no votes
+          _id: generatedId
+        });
+      }
+    });
+  }
+  
+  // Add vote if user selected this option
+  if (selectedValue) {
+    const optionIndex = response.votingCategories[categoryIndex].options.findIndex(
+      opt => opt.optionName.toLowerCase() === selectedValue.toLowerCase()
+    );
+    
+    if (optionIndex !== -1) {
+      // Add user to votes array if not already there
+      const votes = response.votingCategories[categoryIndex].options[optionIndex].votes;
+      if (!votes.includes(userId)) {
+        votes.push(userId);
+      }
+    }
+  }
+  break;
           
         case 'checkbox':
           // For checkbox fields, find the right category by field title
@@ -330,6 +351,11 @@ export const formatEventResponseData = (
             checkboxCategoryIndex = response.votingCategories.length - 1;
           }
           
+          // First, clear all user's votes from this category
+          response.votingCategories[checkboxCategoryIndex].options.forEach(option => {
+            option.votes = option.votes.filter(id => id !== userId);
+          });
+          
           // Track ONLY user-added options
           const userAddedCheckboxOptions: string[] = [];
           
@@ -341,7 +367,7 @@ export const formatEventResponseData = (
                 if (option && typeof option === 'string' && option.trim() !== '') {
                   // Check if this option is not in the original field options
                   const isOriginalOption = fieldData.options?.some(
-                    (opt: CustomFieldOption) => opt.label === option.trim()
+                    (opt: CustomFieldOption) => opt.label.toLowerCase() === option.trim().toLowerCase()
                   ) || false;
                   
                   if (!isOriginalOption && !userAddedCheckboxOptions.includes(option.trim())) {
@@ -350,49 +376,6 @@ export const formatEventResponseData = (
                 }
               });
             }
-            
-            // Also look for user-added options in the checked items
-            Object.entries(fieldResponse).forEach(([key, value]) => {
-              // Skip the userAddedOptions array itself
-              if (key === 'userAddedOptions') return;
-              
-              if (value === true) {
-                let optionName;
-                
-                // For user-added options with ID pattern "user_something"
-                if (key.startsWith('user_')) {
-                  // Get original capitalization from userAddedOptions if possible
-                  if (Array.isArray(fieldResponse.userAddedOptions)) {
-                    // Find the original option that would create this key when transformed
-                    const originalOption = fieldResponse.userAddedOptions.find(
-                      option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
-                    );
-                    
-                    if (originalOption) {
-                      optionName = originalOption; // Use with original capitalization
-                    } else {
-                      // Fallback: reconstruct by removing "user_" prefix and replacing underscores with spaces
-                      optionName = key.substring(5).replace(/_/g, ' ');
-                    }
-                  } else {
-                    // If no userAddedOptions array, reconstruct from the key
-                    optionName = key.substring(5).replace(/_/g, ' ');
-                  }
-                } else {
-                  // For original options, use the key directly
-                  optionName = key;
-                }
-                
-                // Check if this is not an original option
-                const isOriginalOption = fieldData.options?.some(
-                  (opt: CustomFieldOption) => opt.id.toString() === key || opt.label.toLowerCase() === optionName.toLowerCase()
-                ) || false;
-                
-                if (!isOriginalOption && !userAddedCheckboxOptions.includes(optionName)) {
-                  userAddedCheckboxOptions.push(optionName);
-                }
-              }
-            });
           }
           
           // Store ONLY user-added options in the new structure
@@ -400,29 +383,30 @@ export const formatEventResponseData = (
             response.suggestedOptions[fieldId] = userAddedCheckboxOptions;
           }
           
-          // Add all options (both original and user-added) to the category for voting purposes
-          // Add original options first
-          fieldData.options?.forEach((opt: CustomFieldOption) => {
-            const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
-              existingOpt => existingOpt.optionName === opt.label
-            );
-            
-            if (!optionExists) {
-              const generatedId = generateMongoId();
-              response.votingCategories[checkboxCategoryIndex].options.push({
-                optionName: opt.label,
-                votes: [],
-                _id: generatedId
-              });
-            }
-          });
+          // Make sure all original options exist in the category
+          if (fieldData.options && fieldData.options.length > 0) {
+            fieldData.options.forEach((opt: CustomFieldOption) => {
+              const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
+                existingOpt => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
+              );
+              
+              if (!optionExists) {
+                const generatedId = generateMongoId();
+                response.votingCategories[checkboxCategoryIndex].options.push({
+                  optionName: opt.label,
+                  votes: [], // Start with no votes
+                  _id: generatedId
+                });
+              }
+            });
+          }
           
           // Then add user-added options
           if (fieldData.allowUserAddOptions && userAddedCheckboxOptions.length > 0) {
             userAddedCheckboxOptions.forEach(optionName => {
               // Check if this option already exists in the category
               const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
-                opt => opt.optionName === optionName
+                opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
               );
               
               if (!optionExists) {
@@ -438,70 +422,70 @@ export const formatEventResponseData = (
           }
           
           // Get all checked options (both original and user-added)
-const checkedOptions = [];
-if (fieldResponse && typeof fieldResponse === 'object') {
-  // Look through all properties except 'userAddedOptions'
-  Object.entries(fieldResponse).forEach(([key, isChecked]) => {
-    if (key !== 'userAddedOptions' && isChecked === true) {
-      // For original options, get the label from the field definition
-      if (fieldData.options) {
-        const originalOption = fieldData.options.find(
-          (opt: CustomFieldOption) => opt.id.toString() === key
-        );
-        if (originalOption) {
-          checkedOptions.push(originalOption.label);
-          return;
-        }
-      }
-      
-      // For user-added options (with key pattern "user_something")
-      if (key.startsWith('user_')) {
-        // Get original capitalization from userAddedOptions if possible
-        if (Array.isArray(fieldResponse.userAddedOptions)) {
-          // Find the original option that would create this key when transformed
-          const originalOption = fieldResponse.userAddedOptions.find(
-            option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
-          );
-          
-          if (originalOption) {
-            checkedOptions.push(originalOption); // Use with original capitalization
-          } else {
-            // Fallback: reconstruct by removing "user_" prefix and replacing underscores with spaces
-            const reconstructedOption = key.substring(5).replace(/_/g, ' ');
-            checkedOptions.push(reconstructedOption);
+          const checkedOptions = [];
+          if (fieldResponse && typeof fieldResponse === 'object') {
+            // Look through all properties except 'userAddedOptions'
+            Object.entries(fieldResponse).forEach(([key, isChecked]) => {
+              if (key !== 'userAddedOptions' && isChecked === true) {
+                // For original options, get the label from the field definition
+                if (fieldData.options) {
+                  const originalOption = fieldData.options.find(
+                    (opt: CustomFieldOption) => opt.id.toString() === key
+                  );
+                  if (originalOption) {
+                    checkedOptions.push(originalOption.label);
+                    return;
+                  }
+                }
+                
+                // For user-added options (with key pattern "user_something")
+                if (key.startsWith('user_')) {
+                  // Get original capitalization from userAddedOptions if possible
+                  if (Array.isArray(fieldResponse.userAddedOptions)) {
+                    // Find the original option that would create this key when transformed
+                    const originalOption = fieldResponse.userAddedOptions.find(
+                      option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
+                    );
+                    
+                    if (originalOption) {
+                      checkedOptions.push(originalOption); // Use with original capitalization
+                    } else {
+                      // Fallback: reconstruct by removing "user_" prefix and replacing underscores with spaces
+                      const reconstructedOption = key.substring(5).replace(/_/g, ' ');
+                      checkedOptions.push(reconstructedOption);
+                    }
+                  } else {
+                    // If no userAddedOptions array, reconstruct from the key
+                    const reconstructedOption = key.substring(5).replace(/_/g, ' ');
+                    checkedOptions.push(reconstructedOption);
+                  }
+                }
+              }
+            });
           }
-        } else {
-          // If no userAddedOptions array, reconstruct from the key
-          const reconstructedOption = key.substring(5).replace(/_/g, ' ');
-          checkedOptions.push(reconstructedOption);
-        }
-      }
-    }
-  });
-}
 
-// Now add votes for each checked option
-checkedOptions.forEach(optionName => {
-  const optionIndex = response.votingCategories[checkboxCategoryIndex].options.findIndex(
-    opt => opt.optionName === optionName
-  );
-  
-  if (optionIndex !== -1) {
-    // Add user to votes array if not already there
-    const votes = response.votingCategories[checkboxCategoryIndex].options[optionIndex].votes;
-    if (!votes.includes(userId)) {
-      votes.push(userId);
-    }
-  } else {
-    // Option doesn't exist yet, add it
-    const generatedId = generateMongoId();
-    response.votingCategories[checkboxCategoryIndex].options.push({
-      optionName: optionName,
-      votes: [userId],
-      _id: generatedId
-    });
-  }
-});
+          // Now add votes for each checked option
+          checkedOptions.forEach(optionName => {
+            const optionIndex = response.votingCategories[checkboxCategoryIndex].options.findIndex(
+              opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+            );
+            
+            if (optionIndex !== -1) {
+              // Add user to votes array if not already there
+              const votes = response.votingCategories[checkboxCategoryIndex].options[optionIndex].votes;
+              if (!votes.includes(userId)) {
+                votes.push(userId);
+              }
+            } else {
+              // Option doesn't exist yet, add it
+              const generatedId = generateMongoId();
+              response.votingCategories[checkboxCategoryIndex].options.push({
+                optionName: optionName,
+                votes: [userId],
+                _id: generatedId
+              });
+            }
+          });
           break;
       }
     }

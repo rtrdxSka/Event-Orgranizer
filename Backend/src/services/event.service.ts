@@ -276,11 +276,21 @@ export const createOrUpdateEventResponse = async (
   let dateCategory = event.votingCategories.find(cat => cat.categoryName === "date");
   let placeCategory = event.votingCategories.find(cat => cat.categoryName === "place");
 
-   const newOptionsAdded: Record<string, string[]> = {};
+  // Helper function to check if an option is user-added (not present in original field options)
+  function isUserAddedOption(optionName: string, originalField: any): boolean {
+    if (!originalField || !originalField.options) {
+      return true; // If we can't find the original field or it has no options, consider it user-added
+    }
+    
+    // Check if this option exists in the original field options
+    return !originalField.options.some((opt: any) => 
+      opt.label.toLowerCase() === optionName.toLowerCase()
+    );
+  }
 
   // Handle dates
   if (dateCategory) {
-    // Remove user's previous votes
+    // Remove user's previous votes from ALL date options
     dateCategory.options.forEach(option => {
       const index = option.votes.findIndex(id => id.equals(userObjectId));
       if (index !== -1) {
@@ -329,7 +339,7 @@ export const createOrUpdateEventResponse = async (
 
   // Handle places
   if (placeCategory) {
-    // Remove user's previous votes
+    // Remove user's previous votes from ALL place options
     placeCategory.options.forEach(option => {
       const index = option.votes.findIndex(id => id.equals(userObjectId));
       if (index !== -1) {
@@ -402,16 +412,24 @@ export const createOrUpdateEventResponse = async (
 
     // Find the field definition from customFields
     let fieldId = '';
-    let originalField: CustomField | undefined;
+    let originalField: any = undefined;
     
     // Find the field by looking for matching title
     for (const [key, field] of Object.entries(event.customFields || {})) {
       if (field.title === responseCategory.categoryName) {
         fieldId = key;
-        originalField = field as CustomField;
+        originalField = field;
         break;
       }
     }
+    
+    // FIRST REMOVE USER'S VOTES FROM ALL OPTIONS IN THIS CATEGORY
+    eventCategory.options.forEach(option => {
+      const index = option.votes.findIndex(id => id.equals(userObjectId));
+      if (index !== -1) {
+        option.votes.splice(index, 1);
+      }
+    });
     
     // Process each option in the response
     for (const responseOption of responseCategory.options) {
@@ -420,7 +438,7 @@ export const createOrUpdateEventResponse = async (
       
       // Check if this option exists in the event's voting category
       const optionExists = eventCategory.options.some(opt => 
-        opt.optionName === responseOption.optionName
+        opt.optionName.toLowerCase() === responseOption.optionName.toLowerCase()
       );
       
       // Check if this option is user-added
@@ -439,28 +457,11 @@ export const createOrUpdateEventResponse = async (
       if (isUserOption && !categoryUserOptions.includes(responseOption.optionName)) {
         categoryUserOptions.push(responseOption.optionName);
       }
-    }
-
-    // If we found user-suggested options, add them to the suggestedOptions object
-    if (categoryUserOptions.length > 0) {
-      // Use the fieldId when available, otherwise fall back to categoryName
-      const key = fieldId;
-      suggestedOptions[key] = categoryUserOptions;
-    }
-
-    // Now handle the voting - first remove this user from all options in this category
-    eventCategory.options.forEach(option => {
-      const index = option.votes.findIndex(id => id.equals(userObjectId));
-      if (index !== -1) {
-        option.votes.splice(index, 1);
-      }
-    });
-
-    // Then add user to the options they voted for
-    for (const responseOption of responseCategory.options) {
+      
+      // If this option has the user's vote, add it
       if (responseOption.votes.includes(userId)) {
         const eventOption = eventCategory.options.find(
-          opt => opt.optionName === responseOption.optionName
+          opt => opt.optionName.toLowerCase() === responseOption.optionName.toLowerCase()
         );
 
         if (eventOption) {
@@ -470,6 +471,13 @@ export const createOrUpdateEventResponse = async (
           }
         }
       }
+    }
+
+    // If we found user-suggested options, add them to the suggestedOptions object
+    if (categoryUserOptions.length > 0) {
+      // Use the fieldId when available, otherwise fall back to categoryName
+      const key = fieldId;
+      suggestedOptions[key] = categoryUserOptions;
     }
   }
 
@@ -504,7 +512,7 @@ export const createOrUpdateEventResponse = async (
     fieldResponses,
     suggestedDates: Array.isArray(data.suggestedDates) ? data.suggestedDates : [],
     suggestedPlaces: Array.isArray(data.suggestedPlaces) ? data.suggestedPlaces : [],
-    suggestedOptions: data.suggestedOptions || {},
+    suggestedOptions: data.suggestedOptions,
   };
 
   let response;
@@ -519,7 +527,6 @@ export const createOrUpdateEventResponse = async (
     // Create new response
     response = await EventResponseModel.create(responseData);
   }
-
 
   return {
     response,
