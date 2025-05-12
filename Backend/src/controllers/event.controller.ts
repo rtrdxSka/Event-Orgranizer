@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents } from "../services/event.service";
+import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
@@ -51,6 +51,12 @@ export const submitEventResponseHandler = catchErrors(async (req: Request, res: 
   // Get user email and name from the authenticated user object
   const userEmail = req.userEmail;
   appAssert(userEmail, 400, "User email is required");
+
+    await updateEventResponseWithNotifications(
+    userId.toString(),
+    userEmail,
+    validatedData
+  );
   
   // Create or update event response
   const { response, event } = await createOrUpdateEventResponse(

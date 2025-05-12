@@ -8,6 +8,10 @@ import { CreateEventInput, createEventSchema } from "../controllers/event.schema
 import EventResponseModel from "../models/eventResponse.model";
 import { CreateEventResponseInput } from "../controllers/eventResponse.schemas";
 
+import { sendMail } from "../utils/sendMail";
+import { getNewOptionsAddedTemplate } from "../utils/emailTemplates";
+import { APP_ORIGIN } from "../constants/env";
+
 interface CustomFieldOption {
   id: number;
   label: string;
@@ -272,6 +276,8 @@ export const createOrUpdateEventResponse = async (
   let dateCategory = event.votingCategories.find(cat => cat.categoryName === "date");
   let placeCategory = event.votingCategories.find(cat => cat.categoryName === "place");
 
+   const newOptionsAdded: Record<string, string[]> = {};
+
   // Handle dates
   if (dateCategory) {
     // Remove user's previous votes
@@ -514,6 +520,7 @@ export const createOrUpdateEventResponse = async (
     response = await EventResponseModel.create(responseData);
   }
 
+
   return {
     response,
     event,
@@ -580,172 +587,6 @@ export const getEventResponses = async (eventId: string) => {
 
 
 //fetch other user responses
-
-// export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
-//   // Verify event exists
-//   const event = await EventModel.findById(eventId);
-//   appAssert(event, NOT_FOUND, "Event not found");
-
-//   // Get all responses for this event except the current user's
-//   const otherResponses = await EventResponseModel.find({
-//     eventId,
-//     userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
-//   }).populate('userId', 'email name');
-
-//   // Get current user's response for filtering
-//   const currentUserResponse = await EventResponseModel.findOne({
-//     eventId,
-//     userId: currentUserId
-//   });
-
-//   // Extract unique suggestions from all responses
-//   const uniqueSuggestions = {
-//     dates: new Set<string>(),
-//     places: new Set<string>(),
-//     customFields: {} as Record<string, Set<string>>
-//   };
-
-//   // Filter function to check if a suggestion already exists in user's response
-//   const isUniqueDate = (date: string) => {
-//     if (!currentUserResponse || !currentUserResponse.suggestedDates.includes(date)) {
-//       if (event.eventDates?.dates && !event.eventDates.dates.includes(date)) {
-//         return true;
-//       }
-//     }
-//     return false;
-//   };
-
-//   const isUniquePlace = (place: string) => {
-//     if (!currentUserResponse || !currentUserResponse.suggestedPlaces.includes(place)) {
-//       if (event.eventPlaces?.places && !event.eventPlaces.places.includes(place)) {
-//         return true;
-//       }
-//     }
-//     return false;
-//   };
-
-//   // Process all other users' responses
-//   otherResponses.forEach(response => {
-//     // Process dates
-//     response.suggestedDates.forEach(date => {
-//       if (isUniqueDate(date)) {
-//         uniqueSuggestions.dates.add(date);
-//       }
-//     });
-
-//     // Process places
-//     response.suggestedPlaces.forEach(place => {
-//       if (isUniquePlace(place)) {
-//         uniqueSuggestions.places.add(place);
-//       }
-//     });
-
-//     // Process custom field responses
-//     response.fieldResponses.forEach(fieldResponse => {
-//       const { fieldId, type, response: fieldValue } = fieldResponse;
-      
-//       // Only process relevant field types
-//       if (type === 'list' && Array.isArray(fieldValue)) {
-//         if (!uniqueSuggestions.customFields[fieldId]) {
-//           uniqueSuggestions.customFields[fieldId] = new Set<string>();
-//         }
-        
-//         // Add each unique list item
-//         fieldValue.forEach(value => {
-//           if (typeof value === 'string' && value.trim() !== '') {
-//             // Check if this value is unique compared to current user's response
-//             let isUnique = true;
-            
-//             if (currentUserResponse) {
-//               const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
-//               if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
-//                 if (userFieldResponse.response.includes(value)) {
-//                   isUnique = false;
-//                 }
-//               }
-//             }
-            
-//             if (isUnique) {
-//               uniqueSuggestions.customFields[fieldId].add(value);
-//             }
-//           }
-//         });
-//       }
-//     });
-
-//     // Process suggested options from other users (for voting categories)
-//     if (response.suggestedOptions) {
-//       for (const [categoryKey, options] of Object.entries(response.suggestedOptions)) {
-//         if (Array.isArray(options)) {
-//           // Skip date and place categories as they're already processed
-//           if (categoryKey === 'date' || categoryKey === 'place') continue;
-          
-//           // IMPORTANT: This section needs to properly identify field keys
-//           // Find the correct field key for this category
-//           let fieldKeyToUse = categoryKey;
-          
-//           // If categoryKey is not a direct field key, try to find the matching field
-//           if (!uniqueSuggestions.customFields[categoryKey]) {
-//             // Look through event.customFields to find field with matching title
-//             for (const [fieldKey, fieldValue] of event.customFields.entries()) {
-//               if (fieldValue.title === categoryKey) {
-//                 fieldKeyToUse = fieldKey;
-//                 break;
-//               }
-//             }
-//           }
-          
-//           // Initialize set for this field if needed
-//           if (!uniqueSuggestions.customFields[fieldKeyToUse]) {
-//             uniqueSuggestions.customFields[fieldKeyToUse] = new Set<string>();
-//           }
-          
-//           options.forEach(option => {
-//             if (typeof option === 'string' && option.trim() !== '') {
-//               // Check if this option is unique compared to current user's response
-//               let isUnique = true;
-              
-//               if (currentUserResponse && currentUserResponse.suggestedOptions) {
-//                 const userOptions = currentUserResponse.suggestedOptions[categoryKey];
-//                 if (Array.isArray(userOptions) && userOptions.includes(option)) {
-//                   isUnique = false;
-//                 }
-//               }
-              
-//               // Check if option already exists in voting categories
-//               const categoryExists = event.votingCategories.some(cat => 
-//                 cat.categoryName === categoryKey && 
-//                 cat.options.some(opt => opt.optionName === option)
-//               );
-              
-//               if (isUnique && !categoryExists) {
-//                 uniqueSuggestions.customFields[fieldKeyToUse].add(option);
-//               }
-//             }
-//           });
-//         }
-//       }
-//     }
-//   });
-
-//   // Convert Sets to arrays for the response
-//   return {
-//     event: {
-//       _id: event._id,
-//       name: event.name,
-//       description: event.description
-//     },
-//     uniqueSuggestions: {
-//       dates: Array.from(uniqueSuggestions.dates),
-//       places: Array.from(uniqueSuggestions.places),
-//       customFields: Object.fromEntries(
-//         Object.entries(uniqueSuggestions.customFields).map(([key, valueSet]) => 
-//           [key, Array.from(valueSet)]
-//         )
-//       )
-//     }
-//   };
-// };
 
 export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
   // Verify event exists
@@ -1004,4 +845,168 @@ export const getUserRespondedEvents = async (userId: string) => {
   }));
 
   return eventsWithResponseCounts;
+};
+
+
+/**
+ * Updates an event response and sends notifications about new options
+ * This function wraps createOrUpdateEventResponse to preserve its original behavior
+ * while adding notification capabilities
+ */
+export const updateEventResponseWithNotifications = async (
+  userId: string,
+  userEmail: string,
+  data: CreateEventResponseInput
+) => {
+  try {
+    // Get the current event state before updating
+    const event = await EventModel.findById(data.eventId);
+    if (!event) {
+      appAssert(false, NOT_FOUND, "Event not found");
+      return; // This line won't execute due to appAssert, but TypeScript doesn't know that
+    }
+
+    // Clone the original event for comparison
+    const originalEventState = JSON.parse(JSON.stringify(event));
+
+    // Call the existing function to update the event
+    const result = await createOrUpdateEventResponse(userId, userEmail, data);
+
+    // Define interfaces for type safety
+    interface VotingOption {
+      optionName: string;
+      votes: mongoose.Types.ObjectId[];
+      _id?: string;
+    }
+
+    interface VotingCategory {
+      categoryName: string;
+      options: VotingOption[];
+      _id?: string;
+    }
+
+    // Track new options for each category
+    const newOptions: Record<string, string[]> = {};
+
+    // Get the updated event
+    const updatedEvent = result.event;
+
+    // Check date options
+    const currentDateCategory = updatedEvent.votingCategories.find(cat => cat.categoryName === "date");
+    const previousDateCategory = originalEventState.votingCategories.find(
+      (cat: VotingCategory) => cat.categoryName === "date"
+    );
+    
+    if (currentDateCategory && previousDateCategory) {
+      const currentDateOptions = currentDateCategory.options.map(opt => opt.optionName);
+      const previousDateOptions = previousDateCategory.options.map(
+        (opt: VotingOption) => opt.optionName
+      );
+      
+      const newDateOptions = currentDateOptions.filter(opt => !previousDateOptions.includes(opt));
+      
+      if (newDateOptions.length > 0) {
+        newOptions["Event Dates"] = newDateOptions;
+      }
+    }
+
+    // Check place options
+    const currentPlaceCategory = updatedEvent.votingCategories.find(cat => cat.categoryName === "place");
+    const previousPlaceCategory = originalEventState.votingCategories.find(
+      (cat: VotingCategory) => cat.categoryName === "place"
+    );
+    
+    if (currentPlaceCategory && previousPlaceCategory) {
+      const currentPlaceOptions = currentPlaceCategory.options.map(opt => opt.optionName);
+      const previousPlaceOptions = previousPlaceCategory.options.map(
+        (opt: VotingOption) => opt.optionName
+      );
+      
+      const newPlaceOptions = currentPlaceOptions.filter(opt => !previousPlaceOptions.includes(opt));
+      
+      if (newPlaceOptions.length > 0) {
+        newOptions["Event Locations"] = newPlaceOptions;
+      }
+    }
+
+    // Check all other voting categories
+    for (const currentCategory of updatedEvent.votingCategories) {
+      // Skip date and place categories as we already handled them
+      if (currentCategory.categoryName === "date" || currentCategory.categoryName === "place") {
+        continue;
+      }
+      
+      // Find matching category in previous state
+      const previousCategory = originalEventState.votingCategories.find(
+        (cat: VotingCategory) => cat.categoryName === currentCategory.categoryName
+      );
+      
+      // If category is new, all options are new
+      if (!previousCategory) {
+        const categoryOptions = currentCategory.options.map(opt => opt.optionName);
+        if (categoryOptions.length > 0) {
+          newOptions[currentCategory.categoryName] = categoryOptions;
+        }
+        continue;
+      }
+      
+      // Compare options
+      const currentOptions = currentCategory.options.map(opt => opt.optionName);
+      const previousOptions = previousCategory.options.map(
+        (opt: VotingOption) => opt.optionName
+      );
+      
+      const newCategoryOptions = currentOptions.filter(opt => !previousOptions.includes(opt));
+      
+      if (newCategoryOptions.length > 0) {
+        newOptions[currentCategory.categoryName] = newCategoryOptions;
+      }
+    }
+
+    // If no new options were detected, return
+    if (Object.keys(newOptions).length === 0) {
+      return result;
+    }
+
+    // Get all users who have responded to this event (excluding the current user)
+    const otherResponders = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(data.eventId),
+      userId: { $ne: new mongoose.Types.ObjectId(userId) }
+    }).distinct('userEmail');
+    
+    if (otherResponders.length === 0) {
+      return result;
+    }
+
+    // Create the event URL
+    const eventUrl = `${APP_ORIGIN}/event/submit/${updatedEvent.eventUUID}`;
+    
+    // Send notification emails in the background (don't wait)
+    Promise.all(otherResponders.map(async (responderEmail) => {
+      try {
+        const { data, error } = await sendMail({
+          to: responderEmail,
+          ...getNewOptionsAddedTemplate(updatedEvent.name, eventUrl, newOptions)
+        });
+        
+        if (error) {
+          console.error(`Error sending notification to ${responderEmail}:`, error);
+        }
+      } catch (emailError) {
+        console.error(`Failed to send email to ${responderEmail}:`, emailError);
+      }
+    }))
+    .then(() => {
+      console.log(`Sent new options notifications to ${otherResponders.length} users`);
+    })
+    .catch((error) => {
+      console.error('Error sending notification emails:', error);
+    });
+
+    // Return the original result from createOrUpdateEventResponse
+    return result;
+  } catch (error) {
+    console.error('Error in updateEventResponseWithNotifications:', error);
+    throw error; // Re-throw to let error handler deal with it
+  }
 };
