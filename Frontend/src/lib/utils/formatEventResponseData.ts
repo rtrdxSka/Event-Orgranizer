@@ -357,12 +357,35 @@ export const formatEventResponseData = (
               if (key === 'userAddedOptions') return;
               
               if (value === true) {
-                // For user-added options, the key might be complex - extract the option name
-                const optionName = key.split('_').length > 1 ? key.split('_')[1] : key;
+                let optionName;
+                
+                // For user-added options with ID pattern "user_something"
+                if (key.startsWith('user_')) {
+                  // Get original capitalization from userAddedOptions if possible
+                  if (Array.isArray(fieldResponse.userAddedOptions)) {
+                    // Find the original option that would create this key when transformed
+                    const originalOption = fieldResponse.userAddedOptions.find(
+                      option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
+                    );
+                    
+                    if (originalOption) {
+                      optionName = originalOption; // Use with original capitalization
+                    } else {
+                      // Fallback: reconstruct by removing "user_" prefix and replacing underscores with spaces
+                      optionName = key.substring(5).replace(/_/g, ' ');
+                    }
+                  } else {
+                    // If no userAddedOptions array, reconstruct from the key
+                    optionName = key.substring(5).replace(/_/g, ' ');
+                  }
+                } else {
+                  // For original options, use the key directly
+                  optionName = key;
+                }
                 
                 // Check if this is not an original option
                 const isOriginalOption = fieldData.options?.some(
-                  (opt: CustomFieldOption) => opt.id.toString() === key || opt.label === optionName
+                  (opt: CustomFieldOption) => opt.id.toString() === key || opt.label.toLowerCase() === optionName.toLowerCase()
                 ) || false;
                 
                 if (!isOriginalOption && !userAddedCheckboxOptions.includes(optionName)) {
@@ -415,51 +438,70 @@ export const formatEventResponseData = (
           }
           
           // Get all checked options (both original and user-added)
-          const checkedOptions = [];
-          if (fieldResponse && typeof fieldResponse === 'object') {
-            // Look through all properties except 'userAddedOptions'
-            Object.entries(fieldResponse).forEach(([key, isChecked]) => {
-              if (key !== 'userAddedOptions' && isChecked === true) {
-                // For original options, get the label from the field definition
-                if (fieldData.options) {
-                  const originalOption = fieldData.options.find(
-                    (opt: CustomFieldOption) => opt.id.toString() === key
-                  );
-                  if (originalOption) {
-                    checkedOptions.push(originalOption.label);
-                    return;
-                  }
-                }
-                
-                // For user-added options, use the key itself or extract from it
-                const optionName = key.split('_').length > 1 ? key.split('_')[1] : key;
-                checkedOptions.push(optionName);
-              }
-            });
-          }
+const checkedOptions = [];
+if (fieldResponse && typeof fieldResponse === 'object') {
+  // Look through all properties except 'userAddedOptions'
+  Object.entries(fieldResponse).forEach(([key, isChecked]) => {
+    if (key !== 'userAddedOptions' && isChecked === true) {
+      // For original options, get the label from the field definition
+      if (fieldData.options) {
+        const originalOption = fieldData.options.find(
+          (opt: CustomFieldOption) => opt.id.toString() === key
+        );
+        if (originalOption) {
+          checkedOptions.push(originalOption.label);
+          return;
+        }
+      }
+      
+      // For user-added options (with key pattern "user_something")
+      if (key.startsWith('user_')) {
+        // Get original capitalization from userAddedOptions if possible
+        if (Array.isArray(fieldResponse.userAddedOptions)) {
+          // Find the original option that would create this key when transformed
+          const originalOption = fieldResponse.userAddedOptions.find(
+            option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
+          );
           
-          // Now add votes for each checked option
-          checkedOptions.forEach(optionName => {
-            const optionIndex = response.votingCategories[checkboxCategoryIndex].options.findIndex(
-              opt => opt.optionName === optionName
-            );
-            
-            if (optionIndex !== -1) {
-              // Add user to votes array if not already there
-              const votes = response.votingCategories[checkboxCategoryIndex].options[optionIndex].votes;
-              if (!votes.includes(userId)) {
-                votes.push(userId);
-              }
-            } else {
-              // Option doesn't exist yet, add it
-              const generatedId = generateMongoId();
-              response.votingCategories[checkboxCategoryIndex].options.push({
-                optionName: optionName,
-                votes: [userId],
-                _id: generatedId
-              });
-            }
-          });
+          if (originalOption) {
+            checkedOptions.push(originalOption); // Use with original capitalization
+          } else {
+            // Fallback: reconstruct by removing "user_" prefix and replacing underscores with spaces
+            const reconstructedOption = key.substring(5).replace(/_/g, ' ');
+            checkedOptions.push(reconstructedOption);
+          }
+        } else {
+          // If no userAddedOptions array, reconstruct from the key
+          const reconstructedOption = key.substring(5).replace(/_/g, ' ');
+          checkedOptions.push(reconstructedOption);
+        }
+      }
+    }
+  });
+}
+
+// Now add votes for each checked option
+checkedOptions.forEach(optionName => {
+  const optionIndex = response.votingCategories[checkboxCategoryIndex].options.findIndex(
+    opt => opt.optionName === optionName
+  );
+  
+  if (optionIndex !== -1) {
+    // Add user to votes array if not already there
+    const votes = response.votingCategories[checkboxCategoryIndex].options[optionIndex].votes;
+    if (!votes.includes(userId)) {
+      votes.push(userId);
+    }
+  } else {
+    // Option doesn't exist yet, add it
+    const generatedId = generateMongoId();
+    response.votingCategories[checkboxCategoryIndex].options.push({
+      optionName: optionName,
+      votes: [userId],
+      _id: generatedId
+    });
+  }
+});
           break;
       }
     }
