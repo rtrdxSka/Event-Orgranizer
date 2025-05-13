@@ -25,6 +25,8 @@ interface EventPlaces {
   maxPlaces: number;
 }
 
+type EventStatus = 'open' | 'closed' | 'finalized';
+
 export interface EventDocument extends mongoose.Document {
   name: string;
   description: string;
@@ -33,6 +35,8 @@ export interface EventDocument extends mongoose.Document {
   place: string | null;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
+  status: EventStatus;
+  closesBy: Date | null;
   eventDates: EventDates;
   eventPlaces: EventPlaces;
   customFields: Map<string, any>;
@@ -76,6 +80,16 @@ const eventSchema = new mongoose.Schema<EventDocument>({
     type: Date, 
     default: Date.now, 
     required: true 
+  },
+  status: {
+    type: String,
+    enum: ['open', 'closed', 'finalized'],
+    default: 'open',
+    required: true
+  },
+    closesBy: {
+    type: Date,
+    default: null
   },
   customFields: {
     type: Map,

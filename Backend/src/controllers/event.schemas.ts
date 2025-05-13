@@ -92,7 +92,21 @@ export const createEventSchema = z.object({
   customFields: z.record(customFieldSchema).optional(),
   eventDates: eventDatesSchema,
   eventPlaces: eventPlacesSchema,
-  votingCategories: z.array(votingCategorySchema).optional()
+  votingCategories: z.array(votingCategorySchema).optional(),
+  closesBy: z.string().nullable().optional()
+    .refine(val => {
+      // If not provided or null, it's valid
+      if (!val) return true;
+      
+      // Check if it's a valid date and not in the past
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return false;
+      
+      const now = new Date();
+      return date > now;
+    }, {
+      message: "Closing date must be a valid future date"
+    })
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;

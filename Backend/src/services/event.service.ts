@@ -35,19 +35,6 @@ interface CustomField {
   allowUserAddOptions?: boolean;
   selectedOption?: number | null;
 }
-/**
- * Creates a new event with the provided data
- */
-function isUserAddedOption(optionName: string, originalField: CustomField | undefined): boolean {
-  if (!originalField || !originalField.options) {
-    return true; // If we can't find the original field or it has no options, consider it user-added
-  }
-  
-  // Check if this option exists in the original field options
-  return !originalField.options.some((opt: CustomFieldOption) => 
-    opt.label.toLowerCase() === optionName.toLowerCase()
-  );
-}
 
 export const createEvent = async (data: CreateEventInput) => {
   // Validate the input data
@@ -186,6 +173,8 @@ export const createEvent = async (data: CreateEventInput) => {
       }
     }
 
+    const closesBy = data.closesBy ? new Date(data.closesBy) : null;
+
     // Create the event document without explicitly setting eventUUID
     // The model will handle generating a unique eventUUID through its default or middleware
     const event = await EventModel.create({
@@ -195,6 +184,8 @@ export const createEvent = async (data: CreateEventInput) => {
       customFields: customFieldsMap,
       place: null, // Default place to null as per model
       eventDate: null, // Default eventDate to null
+       closesBy: closesBy,
+       status:'open',
       eventDates: {
         dates: filteredDates,
         maxDates: data.eventDates.maxDates,
