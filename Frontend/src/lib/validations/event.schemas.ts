@@ -285,6 +285,29 @@ export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | tru
   return true;
 };
 
+export const validateClosesBy = (closesBy: string | null): string | true => {
+  // If not provided, it's valid (will default to null in the database)
+  if (!closesBy || closesBy.trim() === '') {
+    return true;
+  }
+  
+  // Parse the date and check if it's valid
+  const closeDate = new Date(closesBy);
+  if (isNaN(closeDate.getTime())) {
+    return "Invalid date format";
+  }
+  
+  // Check if it's not a past date
+  const now = new Date();
+  now.setHours(0, 0, 0, 0); // Set to beginning of today for fair comparison
+  
+  if (closeDate < now) {
+    return "Closing date cannot be in the past";
+  }
+  
+  return true;
+};
+
 // Main event form schema
 export const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
@@ -292,6 +315,7 @@ export const eventFormSchema = z.object({
   eventDates: eventDatesSchema,
   place: eventPlaceSchema,
   formFields: z.array(fieldSchema),
+  closesBy: z.string().nullable().optional(),
 });
 
 export type EventFormSchema = z.infer<typeof eventFormSchema>;
@@ -321,6 +345,13 @@ export const validateUniqueFieldTitles = (formFields: FieldSchema[]): string | t
 // Validate the entire form
 export const validateForm = (data: EventFormSchema): string | true => {
 
+
+    if ('closesBy' in data) {
+    const closesByValidation = validateClosesBy(data.closesBy);
+    if (closesByValidation !== true) {
+      return `Closing Date: ${closesByValidation}`;
+    }
+  }
   // First validate that all field titles are unique
   if (data.formFields.length > 0) {
     const titleValidation = validateUniqueFieldTitles(data.formFields);

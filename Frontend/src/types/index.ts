@@ -102,6 +102,7 @@ export interface EventFormData {
     allowUserAdd: boolean;
     maxVotes: number;
   };
+   closesBy: string;
 }
 
 export const initialFormData: EventFormData = {
@@ -119,6 +120,7 @@ export const initialFormData: EventFormData = {
     allowUserAdd: true,
     maxVotes: 1
   },
+   closesBy: ""
 };
 
 // Define a type for the event creation payload

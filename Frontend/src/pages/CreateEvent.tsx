@@ -257,6 +257,7 @@ const CreateEventForm = () => {
           maxVotes: formData.place.maxVotes,
         },
         formFields: formFields,
+        closesBy: formData.closesBy || null,
       };
 
       // First validate the structure with Zod
@@ -412,7 +413,8 @@ const CreateEventForm = () => {
           allowUserAdd: formData.place.allowUserAdd,
           maxVotes: formData.place.maxVotes,
         },
-        votingCategories
+        votingCategories,
+        closesBy: formData.closesBy ? new Date(formData.closesBy).toISOString() : null,
       };
 
       // Submit the form

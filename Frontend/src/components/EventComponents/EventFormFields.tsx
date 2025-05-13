@@ -55,6 +55,23 @@ const EventFormFields = ({
         />
       </div>
 
+            <div>
+        <label className="block text-purple-100 mb-2">Event Closes By</label>
+        <div className="bg-purple-700/30 rounded-md p-4 border border-purple-600/50">
+          <Input
+            name="closesBy"
+            type="datetime-local"
+            value={formData.closesBy}
+            onChange={handleInputChange}
+            className="bg-purple-800/50 border-purple-600 text-purple-100"
+            placeholder="Select closing date and time"
+          />
+          <p className="text-purple-400 text-sm mt-2">
+            Set a date when voting for this event will close. If not set, the event will remain open indefinitely.
+          </p>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="block text-purple-100">Event Dates *</label>
