@@ -105,3 +105,9 @@ export const getUserRespondedEvents = async (): Promise<EventGet[]> => {
   const response = await API.get('/event/responded');
   return response.data;
 };
+
+
+export const getEventForOwner = async (eventId: string): Promise<any> => {
+  const response = await API.get(`/event/${eventId}/edit`);
+  return response.data;
+};
