@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND } from "../constants/http";
+import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, FORBIDDEN } from "../constants/http";
 
 import EventModel from "../models/event.model";
 import UserModel from "../models/user.model";
@@ -1007,4 +1007,52 @@ export const updateEventResponseWithNotifications = async (
     console.error('Error in updateEventResponseWithNotifications:', error);
     throw error; // Re-throw to let error handler deal with it
   }
+};
+
+
+/**
+ * Get event details for owner editing
+ */
+export const getEventForOwner = async (eventId: string, userId: string) => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event and make sure this user is the owner
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can edit this event"
+  );
+
+  // Get all responses for this event
+  const responses = await EventResponseModel.find({ eventId })
+    .populate('userId', 'email name')
+    .sort({ createdAt: -1 });
+  
+  // Create charts data structure
+  const chartsData = event.votingCategories.map(category => {
+    return {
+      categoryName: category.categoryName,
+      options: category.options.map(option => ({
+        optionName: option.optionName,
+        voteCount: option.votes.length,
+        voters: option.votes,
+        addedBy: option.addedBy || null
+      }))
+    };
+  });
+
+  return {
+    event,
+    responses,
+    chartsData
+  };
 };

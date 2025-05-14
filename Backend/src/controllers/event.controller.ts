@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications } from "../services/event.service";
+import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
@@ -138,5 +138,18 @@ export const getUserRespondedEventsHandler = catchErrors(async (req: Request, re
   return res.status(OK).json({
     status: "success",
     data: events
+  });
+});
+
+
+export const getEventForOwnerHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  const data = await getEventForOwner(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    data
   });
 });
