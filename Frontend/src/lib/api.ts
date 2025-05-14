@@ -111,3 +111,4 @@ export const getEventForOwner = async (eventId: string): Promise<any> => {
   const response = await API.get(`/event/${eventId}/edit`);
   return response.data;
 };
+

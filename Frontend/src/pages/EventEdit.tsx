@@ -1,34 +1,67 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import Navbar from '@/components/NavBar';
-import { Loader2, XCircle } from 'lucide-react';
+import { Loader2, XCircle, Users, List } from 'lucide-react';
 import { getEventForOwner } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+// Define TypeScript interfaces
+interface ChartOptionData {
+  optionName: string;
+  voteCount: number;
+  voters: any[];
+  addedBy?: any | null;
+  isOriginal?: boolean;
+}
+
+interface CategoryChartData {
+  categoryName: string;
+  options: ChartOptionData[];
+}
+
+interface ListFieldChartData {
+  fieldId: string;
+  categoryName: string;
+  fieldType: 'list';
+  options: ChartOptionData[];
+}
+
+interface EventOwnerData {
+  event: any;
+  responses: any[];
+  chartsData: CategoryChartData[];
+  listFieldsData: ListFieldChartData[];
+}
+
 const EventEdit = () => {
   const { eventId } = useParams<{ eventId: string }>();
-  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'voting' | 'list'>('voting');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeListField, setActiveListField] = useState<string | null>(null);
 
   // Fetch event data
-  const {
-    data: eventData,
-    isLoading,
-    isError,
-    error
-  } = useQuery({
+  const { 
+    data: eventData, 
+    isLoading, 
+    isError, 
+    error 
+  } = useQuery<EventOwnerData, Error>({
     queryKey: ['eventEdit', eventId],
     queryFn: () => getEventForOwner(eventId || ''),
     enabled: !!eventId,
     onSuccess: (data) => {
-      // Set the first category as active by default
+      // Set defaults for active categories
       if (data.chartsData && data.chartsData.length > 0) {
         setActiveCategory(data.chartsData[0].categoryName);
+      }
+      if (data.listFieldsData && data.listFieldsData.length > 0) {
+        setActiveListField(data.listFieldsData[0].fieldId);
       }
     }
   });
@@ -48,8 +81,8 @@ const EventEdit = () => {
     });
   };
 
-  // Format chart data for the active category
-  const getChartData = (categoryName: string) => {
+  // Format chart data for the active category (voting)
+  const getVotingChartData = (categoryName: string) => {
     if (!eventData) return null;
     
     const category = eventData.chartsData.find(c => c.categoryName === categoryName);
@@ -86,9 +119,39 @@ const EventEdit = () => {
     };
   };
 
+  // Format chart data for list fields
+  const getListFieldChartData = (fieldId: string) => {
+    if (!eventData || !eventData.listFieldsData) return null;
+    
+    const field = eventData.listFieldsData.find(f => f.fieldId === fieldId);
+    
+    if (!field) return null;
+    
+    // Sort options by count (descending)
+    const sortedOptions = [...field.options].sort((a, b) => b.voteCount - a.voteCount);
+    
+    return {
+      labels: sortedOptions.map(opt => opt.optionName),
+      datasets: [
+        {
+          label: 'Count',
+          data: sortedOptions.map(opt => opt.voteCount),
+          backgroundColor: sortedOptions.map(opt => 
+            opt.isOriginal ? 'rgba(75, 192, 192, 0.6)' : 'rgba(153, 102, 255, 0.6)'
+          ),
+          borderColor: sortedOptions.map(opt => 
+            opt.isOriginal ? 'rgb(75, 192, 192)' : 'rgb(153, 102, 255)'
+          ),
+          borderWidth: 1,
+        },
+      ],
+    };
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    indexAxis: 'y' as const,
     plugins: {
       legend: {
         display: false,
@@ -97,13 +160,24 @@ const EventEdit = () => {
         callbacks: {
           label: (context: any) => {
             const value = context.raw;
-            return `${value} ${value === 1 ? 'vote' : 'votes'}`;
+            return `${value} ${value === 1 ? (activeTab === 'voting' ? 'vote' : 'response') : 
+              (activeTab === 'voting' ? 'votes' : 'responses')}`;
           }
         }
       }
     },
     scales: {
       y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function(value: any, index: number, values: any) {
+            const label = this.getLabelForValue(index);
+            // Truncate label if too long
+            return label.length > 25 ? label.substring(0, 22) + '...' : label;
+          }
+        }
+      },
+      x: {
         beginAtZero: true,
         ticks: {
           stepSize: 1
@@ -144,13 +218,16 @@ const EventEdit = () => {
               Error Loading Event
             </h2>
             <p className="text-red-300 mb-8">
-              {error instanceof Error ? error.message : "Failed to load event data"}
+              {error?.message || "Failed to load event data"}
             </p>
           </div>
         </div>
       </div>
     );
   }
+
+  // No responses yet
+  const hasNoResponses = eventData.responses.length === 0;
 
   return (
     <div className="min-h-screen bg-purple-950">
@@ -165,62 +242,171 @@ const EventEdit = () => {
             <p className="text-purple-200 mb-4">
               {eventData.event.description}
             </p>
-            <div className="flex items-center text-sm text-purple-300">
-              <span className="bg-blue-600/30 text-blue-200 px-2 py-1 rounded">
-                {eventData.responses.length} Responses
-              </span>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-purple-300">
+              <Badge className="bg-blue-600/30 text-blue-200">
+                {eventData.responses.length} {eventData.responses.length === 1 ? 'Response' : 'Responses'}
+              </Badge>
+              <Badge className={`${eventData.event.status === 'open' ? 'bg-green-600/30 text-green-200' : 
+                eventData.event.status === 'closed' ? 'bg-yellow-600/30 text-yellow-200' : 
+                'bg-red-600/30 text-red-200'}`}>
+                Status: {eventData.event.status.charAt(0).toUpperCase() + eventData.event.status.slice(1)}
+              </Badge>
             </div>
           </div>
 
-          {/* Voting Categories Section */}
-          <div className="bg-purple-900/40 rounded-xl border border-purple-700/50 mb-6">
-            <div className="p-6 border-b border-purple-700/50">
-              <h2 className="text-2xl font-semibold text-purple-100">
-                Voting Results
-              </h2>
-            </div>
-
-            <div className="grid md:grid-cols-4 gap-0">
-              {/* Category Tabs */}
-              <div className="p-4 border-r border-purple-700/50">
-                <h3 className="text-md font-medium text-purple-200 mb-4">Categories</h3>
-                <div className="space-y-2">
-                  {eventData.chartsData.map((category) => (
-                    <button
-                      key={category.categoryName}
-                      onClick={() => setActiveCategory(category.categoryName)}
-                      className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                        activeCategory === category.categoryName
-                          ? "bg-purple-700/50 text-purple-100"
-                          : "hover:bg-purple-800/30 text-purple-300"
-                      }`}
-                    >
-                      {category.categoryName}
-                    </button>
-                  ))}
+          {/* Tab Navigation */}
+          <div className="mb-6">
+            <div className="flex border-b border-purple-700/50">
+              <button
+                className={`px-4 py-2 text-lg font-medium ${
+                  activeTab === 'voting'
+                    ? 'text-purple-100 border-b-2 border-purple-400'
+                    : 'text-purple-300 hover:text-purple-200'
+                }`}
+                onClick={() => setActiveTab('voting')}
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Voting Results
                 </div>
-              </div>
+              </button>
+              <button
+                className={`px-4 py-2 text-lg font-medium ${
+                  activeTab === 'list'
+                    ? 'text-purple-100 border-b-2 border-purple-400'
+                    : 'text-purple-300 hover:text-purple-200'
+                }`}
+                onClick={() => setActiveTab('list')}
+                disabled={!eventData.listFieldsData || eventData.listFieldsData.length === 0}
+              >
+                <div className="flex items-center gap-2">
+                  <List className="h-5 w-5" />
+                  List Field Responses
+                </div>
+              </button>
+            </div>
+          </div>
 
-              {/* Chart Display */}
-              <div className="p-6 md:col-span-3">
-                {activeCategory && (
-                  <>
-                    <h3 className="text-xl font-medium text-purple-100 mb-4">
-                      {activeCategory} Voting Results
-                    </h3>
-                    <div className="h-80 w-full">
-                      {getChartData(activeCategory) && (
-                        <Bar 
-                          data={getChartData(activeCategory)!} 
-                          options={chartOptions} 
-                        />
+          {hasNoResponses ? (
+            <div className="bg-purple-900/40 rounded-xl p-8 border border-purple-700/50 text-center">
+              <Users className="h-16 w-16 text-purple-300 mx-auto mb-4" />
+              <h2 className="text-2xl font-medium text-purple-100 mb-2">No Responses Yet</h2>
+              <p className="text-purple-200 max-w-md mx-auto">
+                Your event hasn't received any responses yet. Share the event link with participants to start collecting responses.
+              </p>
+            </div>
+          ) : (
+            // Show voting results or list field responses based on active tab
+            <div className="bg-purple-900/40 rounded-xl border border-purple-700/50">
+              {activeTab === 'voting' ? (
+                // Voting Categories Section
+                <div>
+                  <div className="p-6 border-b border-purple-700/50">
+                    <h2 className="text-2xl font-semibold text-purple-100">
+                      Voting Results
+                    </h2>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-0">
+                    {/* Category Tabs */}
+                    <div className="p-4 border-r border-purple-700/50">
+                      <h3 className="text-md font-medium text-purple-200 mb-4">Categories</h3>
+                      <div className="space-y-2">
+                        {eventData.chartsData.map((category) => (
+                          <button
+                            key={category.categoryName}
+                            onClick={() => setActiveCategory(category.categoryName)}
+                            className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                              activeCategory === category.categoryName
+                                ? "bg-purple-700/50 text-purple-100"
+                                : "hover:bg-purple-800/30 text-purple-300"
+                            }`}
+                          >
+                            {category.categoryName}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Chart Display */}
+                    <div className="p-6 md:col-span-3">
+                      {activeCategory && (
+                        <>
+                          <h3 className="text-xl font-medium text-purple-100 mb-4">
+                            {activeCategory} Voting Results
+                          </h3>
+                          <div className="h-96 w-full">
+                            {getVotingChartData(activeCategory) && (
+                              <Bar 
+                                data={getVotingChartData(activeCategory)!} 
+                                options={chartOptions} 
+                              />
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              ) : (
+                // List Field Responses Section
+                <div>
+                  <div className="p-6 border-b border-purple-700/50">
+                    <h2 className="text-2xl font-semibold text-purple-100">
+                      List Field Responses
+                    </h2>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-0">
+                    {/* Field Tabs */}
+                    <div className="p-4 border-r border-purple-700/50">
+                      <h3 className="text-md font-medium text-purple-200 mb-4">List Fields</h3>
+                      {eventData.listFieldsData && eventData.listFieldsData.length > 0 ? (
+                        <div className="space-y-2">
+                          {eventData.listFieldsData.map((field) => (
+                            <button
+                              key={field.fieldId}
+                              onClick={() => setActiveListField(field.fieldId)}
+                              className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                                activeListField === field.fieldId
+                                  ? "bg-purple-700/50 text-purple-100"
+                                  : "hover:bg-purple-800/30 text-purple-300"
+                              }`}
+                            >
+                              {field.categoryName}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-purple-300 italic">No list fields found</p>
+                      )}
+                    </div>
+
+                    {/* Chart Display */}
+                    <div className="p-6 md:col-span-3">
+                      {activeListField && eventData.listFieldsData && eventData.listFieldsData.length > 0 ? (
+                        <>
+                          <h3 className="text-xl font-medium text-purple-100 mb-4">
+                            {eventData.listFieldsData.find(f => f.fieldId === activeListField)?.categoryName} Responses
+                          </h3>
+                          <div className="h-96 w-full">
+                            {getListFieldChartData(activeListField) && (
+                              <Bar 
+                                data={getListFieldChartData(activeListField)!} 
+                                options={chartOptions} 
+                              />
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-purple-300">Select a list field to view responses</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
