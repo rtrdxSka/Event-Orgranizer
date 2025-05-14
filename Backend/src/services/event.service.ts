@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, FORBIDDEN } from "../constants/http";
 
-import EventModel from "../models/event.model";
+import EventModel, { EventDocument } from "../models/event.model";
 import UserModel from "../models/user.model";
 import appAssert from "../utils/appAssert";
 import { CreateEventInput, createEventSchema } from "../controllers/event.schemas";
@@ -1055,4 +1055,31 @@ export const getEventForOwner = async (eventId: string, userId: string) => {
     responses,
     chartsData
   };
+};
+
+/**
+ * Check if an event is still accepting responses based on its ID
+ * @param eventId The ID of the event to check
+ * @returns The event object if it's accepting responses
+ * @throws AppError if event doesn't exist or is not accepting responses
+ */
+export const verifyEventAcceptsResponses = async (eventId: string): Promise<EventDocument> => {
+  // Find the event by ID
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Check if event is accepting responses
+  const isAcceptingResponses = event.status === 'open';
+  
+  // If not accepting responses, throw appropriate error
+  if (!isAcceptingResponses) {
+    const errorMessage = event.status === 'closed' 
+      ? "This event is closed and no longer accepting responses" 
+      : "This event has been finalized and no further changes can be made";
+    
+    appAssert(false, FORBIDDEN, errorMessage);
+  }
+  
+  // Return the event if it's accepting responses
+  return event;
 };

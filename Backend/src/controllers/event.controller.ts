@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications } from "../services/event.service";
+import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
-import { BAD_REQUEST, CREATED, OK } from "../constants/http";
+import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
+import { Document } from "mongoose";
+import { EventDocument } from "../models/event.model";
 
 
 export const createEventHandler = catchErrors(async (req: Request, res: Response) => {
@@ -47,8 +49,10 @@ export const submitEventResponseHandler = catchErrors(async (req: Request, res: 
   
   // Validate request data
   const validatedData = createEventResponseSchema.parse(req.body);
-  
   // Get user email and name from the authenticated user object
+
+await verifyEventAcceptsResponses(validatedData.eventId);
+
   const userEmail = req.userEmail;
   appAssert(userEmail, 400, "User email is required");
 
@@ -153,3 +157,4 @@ export const getEventForOwnerHandler = catchErrors(async (req: Request, res: Res
     data
   });
 });
+
