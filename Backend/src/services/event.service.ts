@@ -1013,7 +1013,35 @@ export const updateEventResponseWithNotifications = async (
 /**
  * Get event details for owner editing
  */
-export const getEventForOwner = async (eventId: string, userId: string) => {
+// Define types for the chart data
+interface ChartOptionData {
+  optionName: string;
+  voteCount: number;
+  voters: mongoose.Types.ObjectId[];
+  addedBy?: mongoose.Types.ObjectId | null;
+  isOriginal?: boolean;
+}
+
+interface CategoryChartData {
+  categoryName: string;
+  options: ChartOptionData[];
+}
+
+interface ListFieldChartData {
+  fieldId: string;
+  categoryName: string;
+  fieldType: 'list';
+  options: ChartOptionData[];
+}
+
+interface EventOwnerData {
+  event: EventDocument;
+  responses: any[]; // Using any[] to avoid the type mismatch with Document[]
+  chartsData: CategoryChartData[];
+  listFieldsData: ListFieldChartData[];
+}
+
+export const getEventForOwner = async (eventId: string, userId: string): Promise<EventOwnerData> => {
   // Verify user exists
   const userExists = await UserModel.exists({
     _id: new mongoose.Types.ObjectId(userId)
@@ -1037,8 +1065,8 @@ export const getEventForOwner = async (eventId: string, userId: string) => {
     .populate('userId', 'email name')
     .sort({ createdAt: -1 });
   
-  // Create charts data structure
-  const chartsData = event.votingCategories.map(category => {
+  // Create charts data structure for voting categories
+  const chartsData: CategoryChartData[] = event.votingCategories.map(category => {
     return {
       categoryName: category.categoryName,
       options: category.options.map(option => ({
@@ -1050,10 +1078,78 @@ export const getEventForOwner = async (eventId: string, userId: string) => {
     };
   });
 
+  // Process list field responses
+  const listFieldsData: ListFieldChartData[] = [];
+  
+  // Iterate through all custom fields to find list fields
+  if (event.customFields) {
+    for (const [fieldId, fieldValue] of event.customFields.entries()) {
+      const field = fieldValue as any; // Cast to any for easy access to properties
+      
+      if (field.type === 'list') {
+        // Collection for all values from all responses
+        const allValues: string[] = [];
+        
+        // Original field values (pre-filled by event creator)
+        const originalValues: string[] = field.values || [];
+        
+        // Track which values were added by which users
+        const valueContributors: Record<string, mongoose.Types.ObjectId[]> = {};
+        
+        // Process all responses for this field
+        responses.forEach(response => {
+          // Find this field in the response's field responses
+          const fieldResponse = response.fieldResponses?.find((fr: any) => fr.fieldId === fieldId);
+          
+          if (fieldResponse && Array.isArray(fieldResponse.response)) {
+            // Add each value to our collection
+            fieldResponse.response.forEach((value: string) => {
+              if (typeof value === 'string' && value.trim() !== '') {
+                allValues.push(value);
+                
+                // Track who contributed this value
+                if (!valueContributors[value]) {
+                  valueContributors[value] = [];
+                }
+                
+                if (response.userId && !valueContributors[value].includes(response.userId)) {
+                  valueContributors[value].push(response.userId);
+                }
+              }
+            });
+          }
+        });
+        
+        // Count occurrences of each value
+        const valueCounts: Record<string, number> = {};
+        allValues.forEach(value => {
+          valueCounts[value] = (valueCounts[value] || 0) + 1;
+        });
+        
+        // Format data for charts
+        const options: ChartOptionData[] = Object.entries(valueCounts).map(([value, count]) => ({
+          optionName: value,
+          voteCount: count,
+          voters: valueContributors[value] || [],
+          isOriginal: originalValues.includes(value)
+        }));
+        
+        // Add to list fields data
+        listFieldsData.push({
+          fieldId,
+          categoryName: field.title,
+          fieldType: 'list',
+          options
+        });
+      }
+    }
+  }
+
   return {
     event,
     responses,
-    chartsData
+    chartsData,
+    listFieldsData
   };
 };
 
