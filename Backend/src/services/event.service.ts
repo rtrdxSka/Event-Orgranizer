@@ -1039,6 +1039,18 @@ interface EventOwnerData {
   responses: any[]; // Using any[] to avoid the type mismatch with Document[]
   chartsData: CategoryChartData[];
   listFieldsData: ListFieldChartData[];
+  textFieldsData: TextFieldResponseData[];
+}
+
+interface TextFieldResponseData {
+  fieldId: string;
+  categoryName: string;
+  responses: Array<{
+    userId: string;
+    userEmail: string;
+    userName?: string;
+    response: string;
+  }>;
 }
 
 export const getEventForOwner = async (eventId: string, userId: string): Promise<EventOwnerData> => {
@@ -1110,6 +1122,8 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
 
   // Process list field responses
   const listFieldsData: ListFieldChartData[] = [];
+
+  const textFieldsData: TextFieldResponseData[] = [];
   
   // Iterate through all custom fields to find list fields
   if (event.customFields) {
@@ -1188,6 +1202,46 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
           fieldType: 'list',
           options
         });
+      } else if (field.type === 'text') {
+        // Collect all text responses
+        const textResponses: Array<{
+          userId: string;
+          userEmail: string;
+          userName?: string;
+          response: string;
+        }> = [];
+        
+        // Process all responses for this field
+        responses.forEach(response => {
+          // Find this field in the response's field responses
+          const fieldResponse = response.fieldResponses?.find((fr: any) => fr.fieldId === fieldId);
+          
+          if (fieldResponse && fieldResponse.response) {
+            // Type assertion for the populated userId
+            const userInfo = response.userId as unknown as { _id: mongoose.Types.ObjectId; email: string; name?: string };
+            
+            if (!userInfo || !userInfo._id) return;
+            
+            const userIdStr = userInfo._id.toString();
+            
+            // Add this response
+            textResponses.push({
+              userId: userIdStr,
+              userEmail: userInfo.email || `User ${userIdStr}`,
+              userName: userInfo.name,
+              response: fieldResponse.response
+            });
+          }
+        });
+        
+        // Only add text fields that have responses
+        if (textResponses.length > 0) {
+          textFieldsData.push({
+            fieldId,
+            categoryName: field.title,
+            responses: textResponses
+          });
+        }
       }
     }
   }
@@ -1196,7 +1250,8 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
     event,
     responses,
     chartsData,
-    listFieldsData
+    listFieldsData,
+    textFieldsData
   };
 };
 
