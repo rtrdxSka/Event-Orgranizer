@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import Navbar from '@/components/NavBar';
-import { Loader2, XCircle, Users, List, X } from 'lucide-react';
+import { Loader2, XCircle, Users, List, X, MessageSquare } from 'lucide-react';
 import { getEventForOwner } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -47,18 +48,32 @@ interface ListFieldChartData {
   options: ChartOption[];
 }
 
+// New interface for text field responses
+interface TextFieldResponseData {
+  fieldId: string;
+  categoryName: string;
+  responses: Array<{
+    userId: string;
+    userEmail: string;
+    userName?: string;
+    response: string;
+  }>;
+}
+
 interface EventOwnerData {
   event: any;
   responses: any[];
   chartsData: CategoryChartData[];
   listFieldsData: ListFieldChartData[];
+  textFieldsData: TextFieldResponseData[]; // Added text fields data
 }
 
 const EventEdit = () => {
   const { eventId } = useParams<{ eventId: string }>();
-  const [activeTab, setActiveTab] = useState<'voting' | 'list'>('voting');
+  const [activeTab, setActiveTab] = useState<'voting' | 'list' | 'text'>('voting');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeListField, setActiveListField] = useState<string | null>(null);
+  const [activeTextField, setActiveTextField] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<{optionName: string, voterDetails: Voter[]} | null>(null);
 
   // Fetch event data
@@ -78,6 +93,9 @@ const EventEdit = () => {
       }
       if (data.listFieldsData && data.listFieldsData.length > 0) {
         setActiveListField(data.listFieldsData[0].fieldId);
+      }
+      if (data.textFieldsData && data.textFieldsData.length > 0) {
+        setActiveTextField(data.textFieldsData[0].fieldId);
       }
     }
   });
@@ -164,6 +182,13 @@ const EventEdit = () => {
       // Store the original options for getting voter data
       _rawOptions: sortedOptions
     };
+  };
+
+  // Get text field data for currently selected field
+  const getTextFieldData = (fieldId: string) => {
+    if (!eventData || !eventData.textFieldsData) return null;
+    
+    return eventData.textFieldsData.find(f => f.fieldId === fieldId);
   };
 
   // Handle chart click to show voters
@@ -279,6 +304,36 @@ const EventEdit = () => {
     );
   };
 
+  // Component to display text field responses
+  const TextFieldResponses = ({ field }: { field: TextFieldResponseData }) => {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-xl font-medium text-purple-100 mb-4">
+          {field.categoryName} Responses
+        </h3>
+        {field.responses.length === 0 ? (
+          <p className="text-purple-300 italic">No responses yet</p>
+        ) : (
+          <div className="space-y-4">
+            {field.responses.map((response, idx) => (
+              <Card key={idx} className="bg-purple-800/40 border-purple-700/50">
+                <CardContent className="p-4">
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Badge className="bg-purple-600">{response.userEmail}</Badge>
+                      {response.userName && <span className="text-purple-200">({response.userName})</span>}
+                    </div>
+                    <p className="text-purple-100">{response.response}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -321,6 +376,9 @@ const EventEdit = () => {
 
   // No responses yet
   const hasNoResponses = eventData.responses.length === 0;
+
+  // Check if there are text fields with responses
+  const hasTextFieldResponses = eventData.textFieldsData && eventData.textFieldsData.length > 0;
 
   return (
     <div className="min-h-screen bg-purple-950">
@@ -383,6 +441,24 @@ const EventEdit = () => {
                   List Field Responses
                 </div>
               </button>
+              {/* New tab for Text Field Responses */}
+              <button
+                className={`px-4 py-2 text-lg font-medium ${
+                  activeTab === 'text'
+                    ? 'text-purple-100 border-b-2 border-purple-400'
+                    : 'text-purple-300 hover:text-purple-200'
+                }`}
+                onClick={() => {
+                  setActiveTab('text');
+                  setSelectedOption(null);
+                }}
+                disabled={!hasTextFieldResponses}
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  Text Field Responses
+                </div>
+              </button>
             </div>
           </div>
 
@@ -395,7 +471,7 @@ const EventEdit = () => {
               </p>
             </div>
           ) : (
-            // Show voting results or list field responses based on active tab
+            // Show voting results, list field responses, or text field responses based on active tab
             <div className="bg-purple-900/40 rounded-xl border border-purple-700/50">
               {activeTab === 'voting' ? (
                 // Voting Categories Section
@@ -455,7 +531,7 @@ const EventEdit = () => {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : activeTab === 'list' ? (
                 // List Field Responses Section
                 <div>
                   <div className="p-6 border-b border-purple-700/50">
@@ -516,6 +592,62 @@ const EventEdit = () => {
                       ) : (
                         <div className="text-center py-8">
                           <p className="text-purple-300">Select a list field to view responses</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Text Field Responses Section
+                <div>
+                  <div className="p-6 border-b border-purple-700/50">
+                    <h2 className="text-2xl font-semibold text-purple-100">
+                      Text Field Responses
+                    </h2>
+                    <p className="text-purple-300 text-sm mt-1">
+                      View individual text responses from participants
+                    </p>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-0">
+                    {/* Field Tabs */}
+                    <div className="p-4 border-r border-purple-700/50">
+                      <h3 className="text-md font-medium text-purple-200 mb-4">Text Fields</h3>
+                      {hasTextFieldResponses ? (
+                        <div className="space-y-2">
+                          {eventData.textFieldsData.map((field) => (
+                            <button
+                              key={field.fieldId}
+                              onClick={() => {
+                                setActiveTextField(field.fieldId);
+                              }}
+                              className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                                activeTextField === field.fieldId
+                                  ? "bg-purple-700/50 text-purple-100"
+                                  : "hover:bg-purple-800/30 text-purple-300"
+                              }`}
+                            >
+                              {field.categoryName}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-purple-300 italic">No text fields with responses</p>
+                      )}
+                    </div>
+
+                    {/* Text Field Response Display */}
+                    <div className="p-6 md:col-span-3">
+                      {activeTextField && hasTextFieldResponses ? (
+                        <>
+                          {getTextFieldData(activeTextField) && (
+                            <TextFieldResponses 
+                              field={getTextFieldData(activeTextField)!} 
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-purple-300">Select a text field to view responses</p>
                         </div>
                       )}
                     </div>

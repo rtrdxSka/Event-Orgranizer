@@ -301,3 +301,51 @@ export interface OtherUserResponsesData {
     customFields: Record<string, string[]>;
   };
 }
+
+
+export interface TextFieldResponseData {
+  fieldId: string;
+  categoryName: string;
+  responses: Array<{
+    userId: string;
+    userEmail: string;
+    userName?: string;
+    response: string;
+  }>;
+}
+
+export interface EventOwnerResponse {
+  event: EventGet;
+  responses: any[];
+  chartsData: Array<{
+    categoryName: string;
+    options: Array<{
+      optionName: string;
+      voteCount: number;
+      voters: string[];
+      voterDetails: Array<{
+        _id: string;
+        email: string;
+        name?: string;
+      }>;
+      addedBy?: any;
+    }>;
+  }>;
+  listFieldsData: Array<{
+    fieldId: string;
+    categoryName: string;
+    fieldType: 'list';
+    options: Array<{
+      optionName: string;
+      voteCount: number;
+      voters: string[];
+      voterDetails: Array<{
+        _id: string;
+        email: string;
+        name?: string;
+      }>;
+      isOriginal?: boolean;
+    }>;
+  }>;
+  textFieldsData: TextFieldResponseData[]; // New field for text responses
+}

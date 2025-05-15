@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse, OtherUserResponsesData } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse, OtherUserResponsesData, EventOwnerResponse } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -107,7 +107,7 @@ export const getUserRespondedEvents = async (): Promise<EventGet[]> => {
 };
 
 
-export const getEventForOwner = async (eventId: string): Promise<any> => {
+export const getEventForOwner = async (eventId: string): Promise<EventOwnerResponse> => {
   const response = await API.get(`/event/${eventId}/edit`);
   return response.data;
 };
