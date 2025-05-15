@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import Navbar from '@/components/NavBar';
-import { Loader2, XCircle, Users, List } from 'lucide-react';
+import { Loader2, XCircle, Users, List, X } from 'lucide-react';
 import { getEventForOwner } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 
@@ -12,24 +12,39 @@ import { Badge } from '@/components/ui/badge';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 // Define TypeScript interfaces
+interface Voter {
+  _id: string;
+  email: string;
+  name?: string;
+}
+
+interface ChartOption {
+  optionName: string;
+  voteCount: number;
+  voters: string[]; // Array of voter IDs
+  voterDetails: Voter[]; // Array of voter objects with details
+  addedBy?: any | null;
+  isOriginal?: boolean;
+}
+
 interface ChartOptionData {
   optionName: string;
   voteCount: number;
-  voters: any[];
+  voters: Voter[];
   addedBy?: any | null;
   isOriginal?: boolean;
 }
 
 interface CategoryChartData {
   categoryName: string;
-  options: ChartOptionData[];
+  options: ChartOption[];
 }
 
 interface ListFieldChartData {
   fieldId: string;
   categoryName: string;
   fieldType: 'list';
-  options: ChartOptionData[];
+  options: ChartOption[];
 }
 
 interface EventOwnerData {
@@ -44,6 +59,7 @@ const EventEdit = () => {
   const [activeTab, setActiveTab] = useState<'voting' | 'list'>('voting');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeListField, setActiveListField] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<{optionName: string, voterDetails: Voter[]} | null>(null);
 
   // Fetch event data
   const { 
@@ -66,22 +82,20 @@ const EventEdit = () => {
     }
   });
 
-  console.log('Event Data:', eventData);
-
   // Format date for display
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     });
   };
 
-  // Format chart data for the active category (voting)
+  // Get chart data for currently selected category
   const getVotingChartData = (categoryName: string) => {
     if (!eventData) return null;
     
@@ -116,6 +130,8 @@ const EventEdit = () => {
           borderWidth: 1,
         },
       ],
+      // Store the original options for getting voter data
+      _rawOptions: sortedOptions
     };
   };
 
@@ -145,13 +161,43 @@ const EventEdit = () => {
           borderWidth: 1,
         },
       ],
+      // Store the original options for getting voter data
+      _rawOptions: sortedOptions
     };
+  };
+
+  // Handle chart click to show voters
+  const handleChartClick = (event: any, elements: any[]) => {
+    if (elements.length === 0) {
+      setSelectedOption(null);
+      return;
+    }
+
+    const { index } = elements[0];
+    let rawOptions;
+    
+    if (activeTab === 'voting') {
+      const chartData = getVotingChartData(activeCategory!);
+      rawOptions = chartData?._rawOptions;
+    } else {
+      const chartData = getListFieldChartData(activeListField!);
+      rawOptions = chartData?._rawOptions;
+    }
+
+    if (rawOptions && index < rawOptions.length) {
+      const option = rawOptions[index];
+      setSelectedOption({
+        optionName: option.optionName,
+        voterDetails: option.voterDetails
+      });
+    }
   };
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis: 'y' as const,
+    onClick: handleChartClick,
     plugins: {
       legend: {
         display: false,
@@ -162,6 +208,23 @@ const EventEdit = () => {
             const value = context.raw;
             return `${value} ${value === 1 ? (activeTab === 'voting' ? 'vote' : 'response') : 
               (activeTab === 'voting' ? 'votes' : 'responses')}`;
+          },
+          footer: (tooltipItems: any) => {
+            const index = tooltipItems[0].dataIndex;
+            let rawOptions;
+            
+            if (activeTab === 'voting') {
+              const chartData = getVotingChartData(activeCategory!);
+              rawOptions = chartData?._rawOptions;
+            } else {
+              const chartData = getListFieldChartData(activeListField!);
+              rawOptions = chartData?._rawOptions;
+            }
+            
+            if (rawOptions && index < rawOptions.length) {
+              return 'Click to see voters';
+            }
+            return '';
           }
         }
       }
@@ -184,6 +247,36 @@ const EventEdit = () => {
         }
       }
     }
+  };
+
+  // Component to display the list of voters for a selected option
+  const VotersList = ({ option }: { option: {optionName: string, voterDetails: Voter[]} }) => {
+    return (
+      <div className="absolute top-4 right-4 w-72 bg-purple-900/80 border border-purple-700 rounded-lg shadow-lg p-4 z-10">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="font-medium text-purple-100">Voters for "{option.optionName}"</h4>
+          <button 
+            onClick={() => setSelectedOption(null)}
+            className="text-purple-300 hover:text-purple-100"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-60 overflow-y-auto">
+          {option.voterDetails.length === 0 ? (
+            <p className="text-purple-300 italic">No voters</p>
+          ) : (
+            <ul className="space-y-2">
+              {option.voterDetails.map((voter, idx) => (
+                <li key={idx} className="bg-purple-800/40 p-2 rounded">
+                  <div className="text-purple-100">{voter.email}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Loading state
@@ -263,7 +356,10 @@ const EventEdit = () => {
                     ? 'text-purple-100 border-b-2 border-purple-400'
                     : 'text-purple-300 hover:text-purple-200'
                 }`}
-                onClick={() => setActiveTab('voting')}
+                onClick={() => {
+                  setActiveTab('voting');
+                  setSelectedOption(null);
+                }}
               >
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -276,7 +372,10 @@ const EventEdit = () => {
                     ? 'text-purple-100 border-b-2 border-purple-400'
                     : 'text-purple-300 hover:text-purple-200'
                 }`}
-                onClick={() => setActiveTab('list')}
+                onClick={() => {
+                  setActiveTab('list');
+                  setSelectedOption(null);
+                }}
                 disabled={!eventData.listFieldsData || eventData.listFieldsData.length === 0}
               >
                 <div className="flex items-center gap-2">
@@ -305,6 +404,9 @@ const EventEdit = () => {
                     <h2 className="text-2xl font-semibold text-purple-100">
                       Voting Results
                     </h2>
+                    <p className="text-purple-300 text-sm mt-1">
+                      Click on a bar to see who voted for that option
+                    </p>
                   </div>
                   <div className="grid md:grid-cols-4 gap-0">
                     {/* Category Tabs */}
@@ -314,7 +416,10 @@ const EventEdit = () => {
                         {eventData.chartsData.map((category) => (
                           <button
                             key={category.categoryName}
-                            onClick={() => setActiveCategory(category.categoryName)}
+                            onClick={() => {
+                              setActiveCategory(category.categoryName);
+                              setSelectedOption(null);
+                            }}
                             className={`w-full text-left px-4 py-2 rounded-lg transition ${
                               activeCategory === category.categoryName
                                 ? "bg-purple-700/50 text-purple-100"
@@ -328,7 +433,7 @@ const EventEdit = () => {
                     </div>
 
                     {/* Chart Display */}
-                    <div className="p-6 md:col-span-3">
+                    <div className="p-6 md:col-span-3 relative">
                       {activeCategory && (
                         <>
                           <h3 className="text-xl font-medium text-purple-100 mb-4">
@@ -342,6 +447,9 @@ const EventEdit = () => {
                               />
                             )}
                           </div>
+                          
+                          {/* Display voters when a bar is clicked */}
+                          {selectedOption && <VotersList option={selectedOption} />}
                         </>
                       )}
                     </div>
@@ -354,6 +462,9 @@ const EventEdit = () => {
                     <h2 className="text-2xl font-semibold text-purple-100">
                       List Field Responses
                     </h2>
+                    <p className="text-purple-300 text-sm mt-1">
+                      Click on a bar to see who provided that response
+                    </p>
                   </div>
                   <div className="grid md:grid-cols-4 gap-0">
                     {/* Field Tabs */}
@@ -364,7 +475,10 @@ const EventEdit = () => {
                           {eventData.listFieldsData.map((field) => (
                             <button
                               key={field.fieldId}
-                              onClick={() => setActiveListField(field.fieldId)}
+                              onClick={() => {
+                                setActiveListField(field.fieldId);
+                                setSelectedOption(null);
+                              }}
                               className={`w-full text-left px-4 py-2 rounded-lg transition ${
                                 activeListField === field.fieldId
                                   ? "bg-purple-700/50 text-purple-100"
@@ -381,7 +495,7 @@ const EventEdit = () => {
                     </div>
 
                     {/* Chart Display */}
-                    <div className="p-6 md:col-span-3">
+                    <div className="p-6 md:col-span-3 relative">
                       {activeListField && eventData.listFieldsData && eventData.listFieldsData.length > 0 ? (
                         <>
                           <h3 className="text-xl font-medium text-purple-100 mb-4">
@@ -395,6 +509,9 @@ const EventEdit = () => {
                               />
                             )}
                           </div>
+                          
+                          {/* Display responders when a bar is clicked */}
+                          {selectedOption && <VotersList option={selectedOption} />}
                         </>
                       ) : (
                         <div className="text-center py-8">

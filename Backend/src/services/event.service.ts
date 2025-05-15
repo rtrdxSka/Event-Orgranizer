@@ -1065,16 +1065,46 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
     .populate('userId', 'email name')
     .sort({ createdAt: -1 });
   
+  // Create a voterMap to look up user information
+  const voterMap: Record<string, { email: string; name?: string }> = {};
+  
+  // Populate the voterMap using responses
+  responses.forEach(response => {
+    // Type assertion to handle the populated userId
+    const userInfo = response.userId as unknown as { _id: mongoose.Types.ObjectId; email: string; name?: string };
+    
+    if (userInfo && userInfo._id) {
+      const userIdStr = userInfo._id.toString();
+      voterMap[userIdStr] = {
+        email: userInfo.email || `User ${userIdStr}`,
+        name: userInfo.name
+      };
+    }
+  });
+  
   // Create charts data structure for voting categories
   const chartsData: CategoryChartData[] = event.votingCategories.map(category => {
     return {
       categoryName: category.categoryName,
-      options: category.options.map(option => ({
-        optionName: option.optionName,
-        voteCount: option.votes.length,
-        voters: option.votes,
-        addedBy: option.addedBy || null
-      }))
+      options: category.options.map(option => {
+        // For each vote, create a record with voter info if available
+        const voterDetails = option.votes.map(voterId => {
+          const voterIdStr = voterId.toString();
+          return {
+            _id: voterIdStr,
+            email: voterMap[voterIdStr]?.email || `User ${voterIdStr}`,
+            name: voterMap[voterIdStr]?.name
+          };
+        });
+        
+        return {
+          optionName: option.optionName,
+          voteCount: option.votes.length,
+          voters: option.votes, // Keep the original voters array of ObjectIds
+          voterDetails, // Add the detailed voter information
+          addedBy: option.addedBy || null
+        };
+      })
     };
   });
 
@@ -1094,7 +1124,7 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
         const originalValues: string[] = field.values || [];
         
         // Track which values were added by which users
-        const valueContributors: Record<string, mongoose.Types.ObjectId[]> = {};
+        const valueContributors: Record<string, { ids: string[]; details: Array<{ _id: string; email: string; name?: string }> }> = {};
         
         // Process all responses for this field
         responses.forEach(response => {
@@ -1102,6 +1132,13 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
           const fieldResponse = response.fieldResponses?.find((fr: any) => fr.fieldId === fieldId);
           
           if (fieldResponse && Array.isArray(fieldResponse.response)) {
+            // Type assertion for the populated userId
+            const userInfo = response.userId as unknown as { _id: mongoose.Types.ObjectId; email: string; name?: string };
+            
+            if (!userInfo || !userInfo._id) return;
+            
+            const userIdStr = userInfo._id.toString();
+            
             // Add each value to our collection
             fieldResponse.response.forEach((value: string) => {
               if (typeof value === 'string' && value.trim() !== '') {
@@ -1109,11 +1146,16 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
                 
                 // Track who contributed this value
                 if (!valueContributors[value]) {
-                  valueContributors[value] = [];
+                  valueContributors[value] = { ids: [], details: [] };
                 }
                 
-                if (response.userId && !valueContributors[value].includes(response.userId)) {
-                  valueContributors[value].push(response.userId);
+                if (!valueContributors[value].ids.includes(userIdStr)) {
+                  valueContributors[value].ids.push(userIdStr);
+                  valueContributors[value].details.push({
+                    _id: userIdStr,
+                    email: userInfo.email || `User ${userIdStr}`,
+                    name: userInfo.name
+                  });
                 }
               }
             });
@@ -1127,12 +1169,17 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
         });
         
         // Format data for charts
-        const options: ChartOptionData[] = Object.entries(valueCounts).map(([value, count]) => ({
-          optionName: value,
-          voteCount: count,
-          voters: valueContributors[value] || [],
-          isOriginal: originalValues.includes(value)
-        }));
+        const options: ChartOptionData[] = Object.entries(valueCounts).map(([value, count]) => {
+          const contributors = valueContributors[value] || { ids: [], details: [] };
+          
+          return {
+            optionName: value,
+            voteCount: count,
+            voters: contributors.ids.map(id => new mongoose.Types.ObjectId(id)), // Convert strings back to ObjectIds
+            voterDetails: contributors.details,
+            isOriginal: originalValues.includes(value)
+          };
+        });
         
         // Add to list fields data
         listFieldsData.push({
