@@ -29,11 +29,11 @@ async function closeExpiredEvents() {
 }
 
 // Schedule to run every hour (at minute 0)
-export const eventClosingTask = cron.schedule('* * * * *', closeExpiredEvents);
+export const eventClosingTask = cron.schedule('*/10 * * * *', closeExpiredEvents);
 
 // Function to initialize all cron jobs
 export function initCronJobs() {
   console.log('[Cron] Initializing cron jobs...');
   eventClosingTask.start();
-  console.log('[Cron] Event closing task scheduled to run every hour.');
+  console.log('[Cron] Event closing task scheduled to run every 10 minutes.');
 }
