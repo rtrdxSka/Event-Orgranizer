@@ -11,11 +11,24 @@ import { CreateEventResponseInput } from "../controllers/eventResponse.schemas";
 import { sendMail } from "../utils/sendMail";
 import { getNewOptionsAddedTemplate } from "../utils/emailTemplates";
 import { APP_ORIGIN } from "../constants/env";
+import FinalizedEventModel from "../models/FinalizedEvent";
 
 interface CustomFieldOption {
   id: number;
   label: string;
   checked?: boolean;
+}
+
+interface FinalizationSelections {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
+}
+
+// Define interfaces for voter details
+interface VoterDetail {
+  optionName: string;
+  voters: mongoose.Types.ObjectId[];
 }
 
 interface CustomField {
@@ -1280,4 +1293,244 @@ export const verifyEventAcceptsResponses = async (eventId: string): Promise<Even
   
   // Return the event if it's accepting responses
   return event;
+};
+
+
+//changing event status
+
+/**
+ * Close an event - change status from 'open' to 'closed'
+ * @param eventId The event ID
+ * @param userId The user ID (must be the event creator)
+ * @returns The updated event
+ */
+export const closeEvent = async (eventId: string, userId: string): Promise<EventDocument> => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can modify this event"
+  );
+  
+  // Check if event is already closed or finalized
+  appAssert(
+    event.status === 'open',
+    BAD_REQUEST,
+    "This event is not in 'open' status and cannot be closed"
+  );
+  
+  // Update status
+  event.status = 'closed';
+  await event.save();
+  
+  return event;
+};
+
+/**
+ * Reopen an event - change status from 'closed' to 'open'
+ * @param eventId The event ID
+ * @param userId The user ID (must be the event creator)
+ * @returns The updated event
+ */
+export const reopenEvent = async (eventId: string, userId: string): Promise<EventDocument> => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can modify this event"
+  );
+  
+  // Check if event is already open or finalized
+  appAssert(
+    event.status === 'closed',
+    BAD_REQUEST,
+    "This event is not in 'closed' status and cannot be reopened"
+  );
+  
+  // Update status
+  event.status = 'open';
+  await event.save();
+  
+  return event;
+};
+
+/**
+ * Finalize an event by setting the final date, place, and custom field selections
+ */
+// In event.service.ts
+
+interface FinalizationSelections {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
+}
+
+// Define interfaces for voter details
+interface VoterDetail {
+  optionName: string;
+  voters: mongoose.Types.ObjectId[];
+}
+
+/**
+ * Finalize an event by setting the final date, place, and custom field selections
+ */
+export const finalizeEvent = async (
+  eventId: string, 
+  userId: string, 
+  selections: FinalizationSelections
+): Promise<any> => {
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event and ensure this user is the owner
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can finalize this event"
+  );
+  
+  // Verify event is not already finalized
+  appAssert(
+    event.status !== 'finalized',
+    BAD_REQUEST,
+    "Event is already finalized"
+  );
+  
+  // Process customFieldSelections to include voter details
+  const customFieldSelections: Record<string, any> = {};
+  
+  // Define a type guard for non-null VoterDetail
+  const isVoterDetail = (item: VoterDetail | null): item is VoterDetail => {
+    return item !== null;
+  };
+  
+  // Extract voter details for each selection
+  for (const [fieldId, selection] of Object.entries(selections.customFields)) {
+    // Find the corresponding voting category for this field
+    const categoryName = event.customFields?.get(fieldId)?.title;
+    
+    if (categoryName) {
+      const category = event.votingCategories.find(cat => cat.categoryName === categoryName);
+      
+      // Extract voter details if this is a voting category
+      if (category) {
+        let voterDetails: VoterDetail[] = [];
+        
+        // If selection is an array (checkbox, list), get voters for each option
+        if (Array.isArray(selection)) {
+          const optionNames = selection;
+          voterDetails = optionNames.map(optionName => {
+            const option = category.options.find(opt => opt.optionName === optionName);
+            return option ? {
+              optionName,
+              voters: option.votes // These are already ObjectIDs
+            } : null;
+          }).filter(isVoterDetail); // Use the type guard
+        } else {
+          // For single selection (radio, text)
+          const option = category.options.find(opt => opt.optionName === selection);
+          if (option) {
+            voterDetails = [{
+              optionName: selection,
+              voters: option.votes
+            }];
+          }
+        }
+        
+        customFieldSelections[fieldId] = {
+          fieldId,
+          fieldType: event.customFields.get(fieldId)?.type || 'unknown',
+          fieldTitle: categoryName,
+          selection,
+          voterDetails
+        };
+      } else {
+        // For non-voting fields (e.g., text fields with direct responses)
+        customFieldSelections[fieldId] = {
+          fieldId,
+          fieldType: event.customFields.get(fieldId)?.type || 'unknown',
+          fieldTitle: categoryName,
+          selection
+        };
+      }
+    }
+  }
+  
+  // Get voter details for date selection
+  let dateVoters: mongoose.Types.ObjectId[] = [];
+  if (selections.date) {
+    const dateCategory = event.votingCategories.find(cat => cat.categoryName === 'date');
+    if (dateCategory) {
+      const dateOption = dateCategory.options.find(opt => opt.optionName === selections.date);
+      if (dateOption) {
+        dateVoters = dateOption.votes;
+      }
+    }
+  }
+  
+  // Get voter details for place selection
+  let placeVoters: mongoose.Types.ObjectId[] = [];
+  if (selections.place) {
+    const placeCategory = event.votingCategories.find(cat => cat.categoryName === 'place');
+    if (placeCategory) {
+      const placeOption = placeCategory.options.find(opt => opt.optionName === selections.place);
+      if (placeOption) {
+        placeVoters = placeOption.votes;
+      }
+    }
+  }
+  
+  // Create a new finalized event record
+  const finalizedEvent = await FinalizedEventModel.create({
+    eventId: event._id,
+    finalizedDate: selections.date,
+    finalizedPlace: selections.place,
+    customFieldSelections,
+    finalizedBy: new mongoose.Types.ObjectId(userId),
+    finalizedAt: new Date()
+  });
+  
+  // Update the original event
+  const now = new Date();
+  event.status = 'finalized';
+  event.eventDate = selections.date ? new Date(selections.date) : null;
+  event.place = selections.place;
+  await event.save();
+  
+  // Send notifications to participants (implement later)
+  
+  return {
+    event,
+    finalizedEvent
+  };
 };

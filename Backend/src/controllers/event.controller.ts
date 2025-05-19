@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, createOrUpdateEventResponse, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
+import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
@@ -157,4 +157,72 @@ export const getEventForOwnerHandler = catchErrors(async (req: Request, res: Res
     data
   });
 });
+
+//event status controller
+
+export const closeEventHandler = catchErrors(async (req, res) => {
+  const { eventId } = req.params;
+  const userId = req.userId.toString();
+  
+  const event = await closeEvent(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event closed successfully",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        status: event.status
+      }
+    }
+  });
+});
+
+// Reopen an event
+export const reopenEventHandler = catchErrors(async (req, res) => {
+  const { eventId } = req.params;
+  const userId = req.userId.toString();
+  
+  const event = await reopenEvent(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event reopened successfully",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        status: event.status
+      }
+    }
+  });
+});
+
+// Finalize an event
+export const finalizeEventHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  // Validate the request body
+  appAssert(eventId, BAD_REQUEST, "Event ID is required");
+  
+  const { date, place, customFields } = req.body;
+  
+  // Call the service function
+  const result = await finalizeEvent(eventId, userId, {
+    date,
+    place,
+    customFields
+  });
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event finalized successfully",
+    data: {
+      event: result.event
+    }
+  });
+});
+
 
