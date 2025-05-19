@@ -349,3 +349,16 @@ export interface EventOwnerResponse {
   }>;
   textFieldsData: TextFieldResponseData[]; // New field for text responses
 }
+
+// Finalization types
+export interface FinalizeSelections {
+  categorySelections: Record<string, string>;
+  listSelections: Record<string, string[]>;
+  textSelections: Record<string, string>;
+}
+
+export interface FinalizeData {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
+}

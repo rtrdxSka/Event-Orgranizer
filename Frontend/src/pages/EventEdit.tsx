@@ -7,7 +7,9 @@ import Navbar from '@/components/NavBar';
 import { Loader2, XCircle, Users, List, X, MessageSquare, LayoutDashboard } from 'lucide-react';
 import { getEventForOwner } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
-import EventVisualization from '@/components/EventVisualization';
+import EventVisualization from '@/components/EventEditComponents/EventVisualization';
+import EventStatusManagement from '@/components/EventEditComponents/EventStatusManagement';
+import { toast } from 'sonner';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -62,6 +64,13 @@ interface EventOwnerData {
   textFieldsData: TextFieldResponseData[];
 }
 
+// Interface for tracking finalization selections
+interface FinalizeSelections {
+  categorySelections: Record<string, string>;
+  listSelections: Record<string, string[]>;
+  textSelections: Record<string, string>;
+}
+
 const EventEdit = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'voting' | 'list' | 'text'>('dashboard');
@@ -69,6 +78,13 @@ const EventEdit = () => {
   const [activeListField, setActiveListField] = useState<string | null>(null);
   const [activeTextField, setActiveTextField] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<{optionName: string, voterDetails: Voter[]} | null>(null);
+  
+  // State to track finalization selections
+  const [finalizeSelections, setFinalizeSelections] = useState<FinalizeSelections>({
+    categorySelections: {},
+    listSelections: {},
+    textSelections: {}
+  });
 
   // Fetch event data
   const { 
@@ -93,6 +109,138 @@ const EventEdit = () => {
       }
     }
   });
+
+  // Handler for selection changes from EventVisualization component
+  const handleSelectionChange = (selections: FinalizeSelections) => {
+    setFinalizeSelections(selections);
+  };
+
+  // Function to prepare finalization data
+  const prepareFinalizeData = () => {
+    if (!eventData) return null;
+
+    // Extract date selection
+    const dateSelection = getFinalDateSelection();
+    
+    // Extract place selection
+    const placeSelection = getFinalPlaceSelection();
+    
+    // Extract custom field selections
+    const customFieldSelections = getFinalCustomFieldSelections();
+    
+    // Return the complete data structure
+    return {
+      date: dateSelection,
+      place: placeSelection,
+      customFields: customFieldSelections
+    };
+  };
+
+  // Helper functions to extract values from the finalize selections
+  const getFinalDateSelection = (): string | null => {
+    if (!eventData) return null;
+    
+    const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'date');
+    if (!dateCategory) return null;
+    
+    // Look for date selection in the category selections
+    for (const [key, value] of Object.entries(finalizeSelections.categorySelections)) {
+      if (key.startsWith('category-date-')) {
+        return value;
+      }
+    }
+    
+    return null;
+  };
+  
+  const getFinalPlaceSelection = (): string | null => {
+    if (!eventData) return null;
+    
+    const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'place');
+    if (!placeCategory) return null;
+    
+    // Look for place selection in the category selections
+    for (const [key, value] of Object.entries(finalizeSelections.categorySelections)) {
+      if (key.startsWith('category-place-')) {
+        return value;
+      }
+    }
+    
+    return null;
+  };
+  
+  const getFinalCustomFieldSelections = (): Record<string, any> => {
+    if (!eventData) return {};
+    
+    const customFields: Record<string, any> = {};
+    
+    // Process selections from voting categories (radio & checkbox fields)
+    eventData.chartsData.forEach(category => {
+      // Skip date and place categories
+      if (category.categoryName.toLowerCase() === 'date' || 
+          category.categoryName.toLowerCase() === 'place') {
+        return;
+      }
+      
+      // Find the corresponding field ID for this category
+      let fieldId = '';
+      if (eventData.event.customFields) {
+        for (const [key, field] of Object.entries(eventData.event.customFields)) {
+          if (field.title === category.categoryName) {
+            fieldId = key;
+            break;
+          }
+        }
+      }
+      
+      if (!fieldId) return;
+      
+      // Collect all selections for this category
+      const selections = [];
+      for (const [key, value] of Object.entries(finalizeSelections.categorySelections)) {
+        if (key.startsWith(`category-${category.categoryName}-`)) {
+          selections.push(value);
+        }
+      }
+      
+      // Store the selection(s)
+      if (selections.length === 1) {
+        // For radio fields, store a single value
+        customFields[fieldId] = selections[0];
+      } else if (selections.length > 1) {
+        // For checkbox fields, store an array of values
+        customFields[fieldId] = selections;
+      }
+    });
+    
+    // Process list field selections
+    if (eventData.listFieldsData) {
+      eventData.listFieldsData.forEach(field => {
+        const fieldSelections = finalizeSelections.listSelections[field.fieldId];
+        if (fieldSelections && fieldSelections.length > 0) {
+          customFields[field.fieldId] = fieldSelections;
+        }
+      });
+    }
+    
+    // Process text field selections
+    if (eventData.textFieldsData) {
+      eventData.textFieldsData.forEach(field => {
+        const selectedResponseUserId = finalizeSelections.textSelections[field.fieldId];
+        if (selectedResponseUserId) {
+          // Find the selected response
+          const selectedResponse = field.responses.find(
+            response => response.userId === selectedResponseUserId
+          );
+          if (selectedResponse) {
+            customFields[field.fieldId] = selectedResponse.response;
+          }
+        }
+      });
+    }
+    
+    return customFields;
+  };
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -210,6 +358,59 @@ const EventEdit = () => {
         voterDetails: option.voterDetails
       });
     }
+  };
+
+  // Validate finalization selections
+  const validateFinalizeSelections = () => {
+    if (!eventData) return false;
+    
+    // Check date selection
+    const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'date');
+    if (dateCategory) {
+      const dateSelection = getFinalDateSelection();
+      if (!dateSelection) {
+        toast.error('Please select a date for the event');
+        return false;
+      }
+    }
+    
+    // Check place selection
+    const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'place');
+    if (placeCategory) {
+      const placeSelection = getFinalPlaceSelection();
+      if (!placeSelection) {
+        toast.error('Please select a location for the event');
+        return false;
+      }
+    }
+    
+    // Check required custom fields
+    if (eventData.event.customFields) {
+      for (const [fieldId, field] of Object.entries(eventData.event.customFields)) {
+        // Skip if field is not required
+        if (!field.required) continue;
+        
+        const customFields = getFinalCustomFieldSelections();
+        
+        // Field is required but no selection made
+        if (!(fieldId in customFields)) {
+          toast.error(`Please make a selection for required field: ${field.title}`);
+          return false;
+        }
+        
+        // Check that selection is not empty
+        const selection = customFields[fieldId];
+        if (
+          (typeof selection === 'string' && selection.trim() === '') ||
+          (Array.isArray(selection) && selection.length === 0)
+        ) {
+          toast.error(`Please make a selection for required field: ${field.title}`);
+          return false;
+        }
+      }
+    }
+    
+    return true;
   };
 
   const chartOptions = {
@@ -345,6 +546,10 @@ const EventEdit = () => {
   const hasListFieldResponses = eventData.listFieldsData && eventData.listFieldsData.length > 0;
   const hasTextFieldResponses = eventData.textFieldsData && eventData.textFieldsData.length > 0;
 
+  // Extract date and place options for the EventStatusManagement component
+  const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === "date");
+  const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === "place");
+
   return (
     <div className="min-h-screen bg-purple-950">
       <Navbar />
@@ -369,6 +574,15 @@ const EventEdit = () => {
               </Badge>
             </div>
           </div>
+
+          {/* Event Status Management Component */}
+          <EventStatusManagement 
+            event={eventData.event}
+            dateOptions={dateCategory?.options}
+            placeOptions={placeCategory?.options}
+            finalizeData={prepareFinalizeData()}
+            validateSelections={validateFinalizeSelections}
+          />
 
           {/* Tab Navigation */}
           <div className="mb-6">
@@ -463,7 +677,7 @@ const EventEdit = () => {
                       Event Dashboard
                     </h2>
                     <p className="text-purple-300 text-sm mt-1">
-                      Overview of all voting categories and responses
+                      Overview of all voting categories and responses. Select options to finalize the event.
                     </p>
                   </div>
                   <div className="p-6">
@@ -473,7 +687,8 @@ const EventEdit = () => {
                         chartsData: eventData.chartsData,
                         listFieldsData: eventData.listFieldsData,
                         textFieldsData: eventData.textFieldsData
-                      }} 
+                      }}
+                      onSelectionChange={handleSelectionChange}
                     />
                   </div>
                 </div>

@@ -112,3 +112,21 @@ export const getEventForOwner = async (eventId: string): Promise<EventOwnerRespo
   return response.data;
 };
 
+// Event status management functions
+export const closeEvent = async (eventId: string): Promise<any> => {
+  const response = await API.patch(`/event/${eventId}/close`);
+  return response;
+};
+
+export const reopenEvent = async (eventId: string): Promise<any> => {
+  const response = await API.patch(`/event/${eventId}/reopen`);
+  return response;
+};
+
+export const finalizeEvent = async (eventId: string, selectionData: {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
+}): Promise<any> => {
+  return API.post(`/event/${eventId}/finalize`, selectionData);
+};
