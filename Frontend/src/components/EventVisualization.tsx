@@ -71,9 +71,10 @@ interface EventVisualizationProps {
     textFieldsData?: TextFieldResponseData[];
     listFieldsData?: ListFieldData[];
   };
+  onSelectionChange?: (selections: Record<string, any>) => void;
 }
 
-const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) => {
+const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSelectionChange }) => {
   // Generate all tabs including categories, list fields, and text fields
   const generateTabs = (): TabInfo[] => {
     const tabs: TabInfo[] = [...eventData.chartsData.map(c => ({ 
@@ -117,7 +118,14 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
     allTabs.length > 0 ? allTabs[0].id : ''
   );
   
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  // State for dropdown selections that persists across tab changes
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({});
+  
+  // State for list field selections
+  const [selectedListItems, setSelectedListItems] = useState<Record<string, string[]>>({});
+  
+  // State for text field selection
+  const [selectedTextResponses, setSelectedTextResponses] = useState<Record<string, string>>({});
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -158,8 +166,19 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
     return eventData.textFieldsData?.find(f => f.fieldId === fieldId) || null;
   };
 
-  // Get max options count for the active category
-  const getMaxOptions = (categoryName: string): number => {
+  // Check if a category is a checkbox type
+  const isCheckboxField = (categoryName: string): boolean => {
+    if (eventData.event.customFields) {
+      for (const [key, field] of Object.entries(eventData.event.customFields)) {
+        if (field.title === categoryName && field.type === 'checkbox') {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+    const getMaxOptions = (categoryName: string): number => {
     const category = categoryName.toLowerCase();
     
     if (category === 'date' && eventData.event.eventDates) {
@@ -182,10 +201,32 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
     return 1; // Default to 1 if not specified
   };
 
+  // Get max entries for a list field
+  const getMaxListEntries = (fieldId: string): number => {
+    if (eventData.event.customFields) {
+      for (const [key, field] of Object.entries(eventData.event.customFields)) {
+        if (key === fieldId && field.type === 'list') {
+          return field.maxEntries || 0;
+        }
+      }
+    }
+    
+    return 0; // Default to unlimited if not specified
+  };
+
   // Distribute options among dropdowns
   const distributeOptions = (options: Option[], categoryName: string): Option[][] => {
-    const maxOptions = getMaxOptions(categoryName);
     const sortedOptions = [...options].sort((a, b) => b.voteCount - a.voteCount);
+    
+    // For date, place, and radio fields - use a single dropdown regardless of maxOptions
+    if (categoryName.toLowerCase() === 'date' || 
+        categoryName.toLowerCase() === 'place' || 
+        !isCheckboxField(categoryName)) {
+      return [sortedOptions];
+    }
+    
+    // For checkbox fields, use the original multiple dropdown distribution
+    const maxOptions = getMaxOptions(categoryName);
     
     // If only one dropdown is needed, return all options in a single array
     if (maxOptions <= 1) {
@@ -238,10 +279,77 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
 
   // Handle selection change
   const handleSelectChange = (dropdownIndex: number, value: string) => {
-    setSelectedOptions(prev => ({
-      ...prev,
+    // Use tabId-dropdownIndex as the key to persist selections across tab changes
+    const updatedSelections = {
+      ...selectedOptions,
       [`${activeTab}-${dropdownIndex}`]: value
-    }));
+    };
+    
+    setSelectedOptions(updatedSelections);
+    
+    // Notify parent component of selection changes if callback provided
+    if (onSelectionChange) {
+      onSelectionChange({
+        categorySelections: updatedSelections,
+        listSelections: selectedListItems,
+        textSelections: selectedTextResponses
+      });
+    }
+  };
+  
+  // Handle list item selection
+  const handleListItemSelection = (fieldId: string, item: string) => {
+    const maxEntries = getMaxListEntries(fieldId);
+    const currentSelections = selectedListItems[fieldId] || [];
+    let newSelections: string[];
+    
+    // If item is already selected, remove it
+    if (currentSelections.includes(item)) {
+      newSelections = currentSelections.filter(i => i !== item);
+    } else {
+      // If not selected and we haven't reached max, add it
+      if (maxEntries === 0 || currentSelections.length < maxEntries) {
+        newSelections = [...currentSelections, item];
+      } else {
+        // If we've reached max, replace the oldest selection (FIFO)
+        newSelections = [...currentSelections.slice(1), item];
+      }
+    }
+    
+    const updatedListSelections = {
+      ...selectedListItems,
+      [fieldId]: newSelections
+    };
+    
+    setSelectedListItems(updatedListSelections);
+    
+    // Notify parent component of selection changes if callback provided
+    if (onSelectionChange) {
+      onSelectionChange({
+        categorySelections: selectedOptions,
+        listSelections: updatedListSelections,
+        textSelections: selectedTextResponses
+      });
+    }
+  };
+  
+  // Handle text response selection
+  const handleTextResponseSelection = (fieldId: string, userId: string) => {
+    const updatedTextSelections = {
+      ...selectedTextResponses,
+      [fieldId]: userId
+    };
+    
+    setSelectedTextResponses(updatedTextSelections);
+    
+    // Notify parent component of selection changes if callback provided
+    if (onSelectionChange) {
+      onSelectionChange({
+        categorySelections: selectedOptions,
+        listSelections: selectedListItems,
+        textSelections: updatedTextSelections
+      });
+    }
   };
 
   return (
@@ -251,7 +359,7 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
         defaultValue={activeTab} 
         onValueChange={(value) => {
           setActiveTab(value);
-          setSelectedOptions({});
+          // We no longer reset selectedOptions here to allow selections to persist
         }}
         className="w-full"
       >
@@ -293,7 +401,9 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
                   {distributeOptions(category.options, category.categoryName).map((optionGroup, groupIndex) => (
                     <div key={`group-${groupIndex}`} className="space-y-4">
                       <h3 className="text-lg font-medium text-purple-100 mb-2">
-                        Option {groupIndex + 1} {groupIndex === 0 && "(Top Votes)"}
+                        {isCheckboxField(category.categoryName) && getMaxOptions(category.categoryName) > 1 ? 
+                          `Option ${groupIndex + 1} ${groupIndex === 0 ? "(Top Votes)" : ""}` : 
+                          groupIndex === 0 ? "Select an option" : ""}
                       </h3>
                       
                       {optionGroup.length > 0 ? (
@@ -460,18 +570,41 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
                     <h3 className="text-lg font-medium text-purple-100 mb-3">
                       All Responses
                     </h3>
+                    <div className="text-purple-200 text-sm mb-2">
+                      {getMaxListEntries(field.fieldId) > 0 ? 
+                        `Select up to ${getMaxListEntries(field.fieldId)} responses` : 
+                        "Select responses"}
+                      {selectedListItems[field.fieldId]?.length > 0 && 
+                        ` (Selected: ${selectedListItems[field.fieldId].length})`}
+                    </div>
                     <Accordion type="single" collapsible className="w-full">
-                      {field.options.sort((a, b) => b.voteCount - a.voteCount).map((option, idx) => (
+                      {field.options.sort((a, b) => b.voteCount - a.voteCount).map((option, idx) => {
+                        const isSelected = selectedListItems[field.fieldId]?.includes(option.optionName);
+                        return (
                         <AccordionItem 
                           key={idx} 
                           value={`option-${idx}`}
                           className={`border-purple-700/50 ${
+                            isSelected ? 'bg-purple-600/20 border-purple-500/50' :
                             idx === 0 ? 'bg-purple-700/20 rounded-md' : ''
                           }`}
                         >
                           <AccordionTrigger className="text-purple-100 hover:text-purple-200 hover:no-underline px-3">
                             <div className="flex items-center justify-between w-full">
-                              <span className="truncate max-w-md text-left">{option.optionName}</span>
+                              <div className="flex items-center">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent accordion from opening
+                                    handleListItemSelection(field.fieldId, option.optionName);
+                                  }}
+                                  className={`flex items-center justify-center w-5 h-5 rounded mr-2 ${
+                                    isSelected ? 'bg-purple-500 text-white' : 'bg-purple-800 hover:bg-purple-700'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="h-3 w-3" />}
+                                </button>
+                                <span className="truncate max-w-md text-left">{option.optionName}</span>
+                              </div>
                               <Badge className="ml-2 bg-purple-600/50">
                                 {option.voteCount} {option.voteCount === 1 ? 'response' : 'responses'}
                               </Badge>
@@ -492,7 +625,7 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
                             </div>
                           </AccordionContent>
                         </AccordionItem>
-                      ))}
+                      )})}
                     </Accordion>
                   </div>
                 </div>
@@ -514,29 +647,64 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData }) =>
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+                              <CardContent>
                 {field.responses.length === 0 ? (
                   <div className="text-center py-10 bg-purple-800/20 rounded-lg">
                     <p className="text-purple-300 italic">No responses yet</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {field.responses.map((response, idx) => (
-                      <Card key={idx} className={`bg-purple-800/40 border-purple-700/50 ${idx === 0 ? 'border-purple-500/50' : ''}`}>
-                        <CardContent className="p-4">
-                          <div className="flex flex-col space-y-3">
-                            <div className="flex items-center space-x-2">
-                              <Badge className="bg-purple-600">{response.userEmail}</Badge>
-                              {response.userName && <span className="text-purple-200 text-sm">({response.userName})</span>}
+                  <>
+                    <div className="mb-4 pb-2 border-b border-purple-700/30">
+                      <h3 className="text-lg font-medium text-purple-100 mb-1">Text Responses</h3>
+                      <p className="text-purple-300 text-sm">
+                        Select one text response
+                        {selectedTextResponses[field.fieldId] && ' (1 selected)'}
+                      </p>
+                    </div>
+                    <div className="space-y-4">
+                      {field.responses.map((response, idx) => {
+                        const isSelected = selectedTextResponses[field.fieldId] === response.userId;
+                        return (
+                        <Card 
+                          key={idx} 
+                          className={`bg-purple-800/40 border-purple-700/50 ${
+                            isSelected ? 'border-2 border-purple-500' : 
+                            idx === 0 ? 'border-purple-500/50' : ''
+                          } cursor-pointer hover:bg-purple-800/60 transition-colors`}
+                          onClick={() => handleTextResponseSelection(field.fieldId, response.userId)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex flex-col space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTextResponseSelection(field.fieldId, response.userId);
+                                    }}
+                                    className={`flex items-center justify-center w-5 h-5 rounded mr-2 ${
+                                      isSelected ? 'bg-purple-500 text-white' : 'bg-purple-800 hover:bg-purple-700'
+                                    }`}
+                                  >
+                                    {isSelected && <Check className="h-3 w-3" />}
+                                  </button>
+                                  <Badge className="bg-purple-600">{response.userEmail}</Badge>
+                                  {response.userName && <span className="text-purple-200 text-sm">({response.userName})</span>}
+                                </div>
+                                {isSelected && (
+                                  <Badge className="bg-green-600/30 text-green-200">Selected</Badge>
+                                )}
+                              </div>
+                              <div className="bg-purple-800/30 p-3 rounded-md border border-purple-700/50">
+                                <p className="text-purple-100">{response.response}</p>
+                              </div>
                             </div>
-                            <div className="bg-purple-800/30 p-3 rounded-md border border-purple-700/50">
-                              <p className="text-purple-100">{response.response}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
