@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { closeEvent, reopenEvent, finalizeEvent } from '@/lib/api';
 import { AlertCircle, X, Calendar, MapPin, Check, CheckCircle, Lock, Unlock, AlertTriangle  } from 'lucide-react';
@@ -24,6 +24,7 @@ interface EventStatusManagementProps {
     status: 'open' | 'closed' | 'finalized';
     eventDate?: string | null;
     place?: string | null;
+    customFields?: Record<string, any>;
   };
   // For final date selection, the event's voting categories
   dateOptions?: { optionName: string, voteCount: number }[] | null;
@@ -56,7 +57,7 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   
   // Update selected date and place when finalizeData changes
-  useEffect(() => {
+  React.useEffect(() => {
     if (finalizeData) {
       setSelectedDate(finalizeData.date);
       setSelectedPlace(finalizeData.place);
@@ -157,18 +158,6 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
       if (!isValid) {
         return; // Don't open dialog if validation fails
       }
-    }
-    
-    // If we have no date selection and no options or date is required
-    if (!finalizeData?.date && (!sortedDateOptions.length || sortedDateOptions.length > 0)) {
-      setValidationMessage("Please select a date for the event");
-      return;
-    }
-    
-    // If we have no place selection and place is required
-    if (!finalizeData?.place && (!sortedPlaceOptions.length || sortedPlaceOptions.length > 0)) {
-      setValidationMessage("Please select a location for the event");
-      return;
     }
     
     // Open the finalize dialog

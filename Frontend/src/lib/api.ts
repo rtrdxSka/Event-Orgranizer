@@ -130,3 +130,8 @@ export const finalizeEvent = async (eventId: string, selectionData: {
 }): Promise<any> => {
   return API.post(`/event/${eventId}/finalize`, selectionData);
 };
+
+export const getFinalizedEvent = async (eventUUID: string): Promise<any> => {
+  const response = await API.get(`/event/finalized/${eventUUID}`);
+  return response.data;
+};

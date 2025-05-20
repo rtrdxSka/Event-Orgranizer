@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import EventVisualization from '@/components/EventEditComponents/EventVisualization';
 import EventStatusManagement from '@/components/EventEditComponents/EventStatusManagement';
 import { toast } from 'sonner';
+import { validateFinalizations, checkEmptyOptionalFields } from '@/lib/validations/eventFinalize.schemas';
+import type { FinalizeSelections as FinalizeSelectionsType } from '@/lib/validations/eventFinalize.schemas';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -361,57 +363,90 @@ const EventEdit = () => {
   };
 
   // Validate finalization selections
-  const validateFinalizeSelections = () => {
-    if (!eventData) return false;
-    
-    // Check date selection
-    const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'date');
-    if (dateCategory) {
-      const dateSelection = getFinalDateSelection();
-      if (!dateSelection) {
-        toast.error('Please select a date for the event');
-        return false;
-      }
-    }
-    
-    // Check place selection
-    const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'place');
-    if (placeCategory) {
-      const placeSelection = getFinalPlaceSelection();
-      if (!placeSelection) {
-        toast.error('Please select a location for the event');
-        return false;
-      }
-    }
-    
-    // Check required custom fields
-    if (eventData.event.customFields) {
-      for (const [fieldId, field] of Object.entries(eventData.event.customFields)) {
-        // Skip if field is not required
-        if (!field.required) continue;
+  // Replace the existing validateFinalizeSelections function with this updated version
+const validateFinalizeSelections = () => {
+  if (!eventData) return false;
+  
+  // Enhanced debugging - log the current state of selections and fields
+  console.log("Current finalize selections:", finalizeSelections);
+  const preparedData = prepareFinalizeData();
+  console.log("Prepared finalize data:", preparedData);
+  
+  // Manual check for required fields to provide better error messages
+  if (eventData.event.customFields) {
+    for (const [fieldId, field] of Object.entries(eventData.event.customFields)) {
+      // Only check required fields
+      if (field.required) {
+        const fieldValue = preparedData.customFields?.[fieldId];
         
-        const customFields = getFinalCustomFieldSelections();
+        // Log the field being checked for debugging
+        console.log(`Checking required field "${field.title}" (${fieldId}):`, { 
+          isRequired: field.required,
+          type: field.type,
+          hasValue: !!fieldValue,
+          value: fieldValue
+        });
         
-        // Field is required but no selection made
-        if (!(fieldId in customFields)) {
-          toast.error(`Please make a selection for required field: ${field.title}`);
-          return false;
-        }
-        
-        // Check that selection is not empty
-        const selection = customFields[fieldId];
-        if (
-          (typeof selection === 'string' && selection.trim() === '') ||
-          (Array.isArray(selection) && selection.length === 0)
-        ) {
-          toast.error(`Please make a selection for required field: ${field.title}`);
+        // Check if the required field has a value
+        if (!fieldValue || 
+            (typeof fieldValue === 'string' && fieldValue.trim() === '') || 
+            (Array.isArray(fieldValue) && fieldValue.length === 0)) {
+            
+          // Provide a specific error message for the missing field
+          const errorMessage = `Field "${field.title}" is required`;
+          toast.error(errorMessage);
+          console.error(errorMessage);
           return false;
         }
       }
     }
-    
-    return true;
-  };
+  }
+  
+  // Check date selection if date voting is present
+  const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'date');
+  if (dateCategory && dateCategory.options.length > 0) {
+    const dateSelection = preparedData.date;
+    if (!dateSelection) {
+      const errorMessage = "Please select a date for the event";
+      toast.error(errorMessage);
+      console.error(errorMessage);
+      return false;
+    }
+  }
+  
+  // Check place selection if place voting is present
+  const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'place');
+  if (placeCategory && placeCategory.options.length > 0) {
+    const placeSelection = preparedData.place;
+    if (!placeSelection) {
+      const errorMessage = "Please select a location for the event";
+      toast.error(errorMessage);
+      console.error(errorMessage);
+      return false;
+    }
+  }
+  
+  // Finally, use the Zod validation as a backup
+  const validationResult = validateFinalizations(finalizeSelections, eventData.event);
+  if (!validationResult.success) {
+    console.error("Zod validation failed:", validationResult.message);
+    toast.error(validationResult.message);
+    return false;
+  }
+  
+  // Check for empty optional fields and warn the user
+  const { hasEmptyOptionals, emptyFields } = checkEmptyOptionalFields(finalizeSelections, eventData.event);
+  if (hasEmptyOptionals) {
+    // Show warning with empty fields, but don't block submission
+    toast.warning(
+      `Some optional fields have no selections: ${emptyFields.join(', ')}. You can continue or go back to make selections.`,
+      { duration: 6000 }
+    );
+  }
+  
+  // All validations passed
+  return true;
+};
 
   const chartOptions = {
     responsive: true,
