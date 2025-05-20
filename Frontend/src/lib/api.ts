@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse, OtherUserResponsesData, EventOwnerResponse } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -64,3 +64,69 @@ export const createEvent = async (eventData: CreateEventPayload): Promise<EventR
 export const getEvent = async (eventUUID: string): Promise<EventGet> => {
   return API.get(`/event/submit/${eventUUID}`);
 }
+
+
+// Submit event response
+export const submitEventResponse = async (responseData: EventResponsePayload): Promise<EventResponseSuccess> => {
+  const response = await API.post('/event/response', responseData);
+  return response;
+};
+
+export const updateEventResponse = async (eventId: string, responseData: EventResponsePayload): Promise<EventResponseSuccess> => {
+  const response = await API.put(`/event/response/${eventId}`, responseData);
+  return response;
+};
+
+
+export const getUserEventResponse = async (eventId: string): Promise<{
+  status: string;
+  data: UserEventResponse;
+}> => {
+  const response = await API.get(`/event/${eventId}/response`);
+  return response;
+};
+
+export const getOtherUserSuggestions = async (eventId: string): Promise<{
+  status: string;
+  data: OtherUserResponsesData;
+}> => {
+  const response = await API.get(`/event/${eventId}/other-responses`);
+  return response;
+};
+
+// Get events created by current user
+export const getUserCreatedEvents = async (): Promise<EventGet[]> => {
+  const response = await API.get('/event/created');
+  return response.data;
+};
+
+// Get events user has responded to
+export const getUserRespondedEvents = async (): Promise<EventGet[]> => {
+  const response = await API.get('/event/responded');
+  return response.data;
+};
+
+
+export const getEventForOwner = async (eventId: string): Promise<EventOwnerResponse> => {
+  const response = await API.get(`/event/${eventId}/edit`);
+  return response.data;
+};
+
+// Event status management functions
+export const closeEvent = async (eventId: string): Promise<any> => {
+  const response = await API.patch(`/event/${eventId}/close`);
+  return response;
+};
+
+export const reopenEvent = async (eventId: string): Promise<any> => {
+  const response = await API.patch(`/event/${eventId}/reopen`);
+  return response;
+};
+
+export const finalizeEvent = async (eventId: string, selectionData: {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
+}): Promise<any> => {
+  return API.post(`/event/${eventId}/finalize`, selectionData);
+};

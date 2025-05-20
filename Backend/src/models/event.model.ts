@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 interface VotingOption {
   optionName: string;
   votes: mongoose.Types.ObjectId[];
+  addedBy?: mongoose.Types.ObjectId;
 }
 
 interface VotingCategory {
@@ -24,6 +25,8 @@ interface EventPlaces {
   maxPlaces: number;
 }
 
+type EventStatus = 'open' | 'closed' | 'finalized';
+
 export interface EventDocument extends mongoose.Document {
   name: string;
   description: string;
@@ -32,6 +35,8 @@ export interface EventDocument extends mongoose.Document {
   place: string | null;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
+  status: EventStatus;
+  closesBy: Date | null;
   eventDates: EventDates;
   eventPlaces: EventPlaces;
   customFields: Map<string, any>;
@@ -76,6 +81,16 @@ const eventSchema = new mongoose.Schema<EventDocument>({
     default: Date.now, 
     required: true 
   },
+  status: {
+    type: String,
+    enum: ['open', 'closed', 'finalized'],
+    default: 'open',
+    required: true
+  },
+    closesBy: {
+    type: Date,
+    default: null
+  },
   customFields: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
@@ -98,7 +113,8 @@ const eventSchema = new mongoose.Schema<EventDocument>({
       categoryName: { type: String, required: true },
       options: [{
         optionName: { type: String, required: true },
-        votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+        votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+        addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
       }]
     }],
     default: []

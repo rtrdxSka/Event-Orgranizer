@@ -102,6 +102,7 @@ export interface EventFormData {
     allowUserAdd: boolean;
     maxVotes: number;
   };
+   closesBy: string;
 }
 
 export const initialFormData: EventFormData = {
@@ -119,6 +120,7 @@ export const initialFormData: EventFormData = {
     allowUserAdd: true,
     maxVotes: 1
   },
+   closesBy: ""
 };
 
 // Define a type for the event creation payload
@@ -211,4 +213,152 @@ export interface EventGet {
   }>;
   updatedAt: string;
   __v: number;
+}
+
+//eventResponse types
+export interface EventResponsePayload {
+  eventId: string;
+  selectedDates: string[];
+  selectedPlaces: string[];
+  suggestedDates: string[];
+  suggestedPlaces: string[];
+  customFields: Record<string, any>;
+  votingCategories: VotingCategory[];
+}
+
+export interface VotingCategory {
+  categoryName: string;
+  options: VotingOption[];
+  _id?: string;
+}
+
+export interface VotingOption {
+  optionName: string;
+  votes: string[];
+  _id?: string;
+  addedBy?: string;
+}
+
+export interface EventResponseSuccess {
+  status: string;
+  data: {
+    response: {
+      eventId: string;
+      userId: string;
+      userEmail: string;
+      userName?: string;
+      fieldResponses: FieldResponse[];
+      suggestedDates: string[];
+      suggestedPlaces: string[];
+      suggestedOptions: Record<string, string[]>;  // New structure - category name to array of options
+      _id: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+    votingCategories: VotingCategory[];
+  }
+}
+
+export interface EventResponseData {
+  eventId: string;
+  userId: string;
+  userEmail: string;
+  fieldResponses: FieldResponse[];
+  _id: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FieldResponse {
+  fieldId: string;
+  type: string;
+  response: any;
+}
+
+export interface UserEventResponse {
+  fieldResponses: FieldResponse[];
+  userVotes: Record<string, string[]>;
+  userAddedOptions: Record<string, string[]>;
+  userSuggestedDates: string[];
+  userSuggestedPlaces: string[];
+  hasResponse: boolean;
+}
+
+export interface SuggestedOption {
+  categoryName: string;
+  optionName: string;
+}
+
+export interface OtherUserResponsesData {
+  event: {
+    _id: string;
+    name: string;
+    description: string;
+  };
+  uniqueSuggestions: {
+    dates: string[];
+    places: string[];
+    customFields: Record<string, string[]>;
+  };
+}
+
+
+export interface TextFieldResponseData {
+  fieldId: string;
+  categoryName: string;
+  responses: Array<{
+    userId: string;
+    userEmail: string;
+    userName?: string;
+    response: string;
+  }>;
+}
+
+export interface EventOwnerResponse {
+  event: EventGet;
+  responses: any[];
+  chartsData: Array<{
+    categoryName: string;
+    options: Array<{
+      optionName: string;
+      voteCount: number;
+      voters: string[];
+      voterDetails: Array<{
+        _id: string;
+        email: string;
+        name?: string;
+      }>;
+      addedBy?: any;
+    }>;
+  }>;
+  listFieldsData: Array<{
+    fieldId: string;
+    categoryName: string;
+    fieldType: 'list';
+    options: Array<{
+      optionName: string;
+      voteCount: number;
+      voters: string[];
+      voterDetails: Array<{
+        _id: string;
+        email: string;
+        name?: string;
+      }>;
+      isOriginal?: boolean;
+    }>;
+  }>;
+  textFieldsData: TextFieldResponseData[]; // New field for text responses
+}
+
+// Finalization types
+export interface FinalizeSelections {
+  categorySelections: Record<string, string>;
+  listSelections: Record<string, string[]>;
+  textSelections: Record<string, string>;
+}
+
+export interface FinalizeData {
+  date: string | null;
+  place: string | null;
+  customFields: Record<string, any>;
 }

@@ -12,6 +12,8 @@ import Profile from "./pages/Profile"
 import { setNavigate } from "./lib/navigation"
 import CreateEvent from "./pages/CreateEvent"
 import EventSubmit from "./pages/EventSubmit"
+import MyEvents from "./pages/MyEvents"
+import EventEdit from "./pages/EventEdit"
 
 
 function App() {
@@ -50,7 +52,16 @@ function App() {
         } 
       />
 
+        <Route 
+        path="/events" 
+        element={
+          <ProtectedRoute>
+            <MyEvents/>
+          </ProtectedRoute>
+        } 
+      />
 
+<Route path="/event/edit/:eventId" element={<ProtectedRoute><EventEdit /></ProtectedRoute>} />
 
       {/* Guest Routes */}
       <Route 

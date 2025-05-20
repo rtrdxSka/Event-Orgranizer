@@ -23,11 +23,14 @@ import CustomFieldsList from "@/components/EventComponents/CustomFieldsList";
 import DraggableField from "@/components/EventComponents/DraggebleField";
 import { toast } from "sonner";
 import { createEvent } from "@/lib/api";
+import EventCreatedModal from "@/components/EventComponents/EventCreatedModal";
 
 const CreateEventForm = () => {
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
   const [formFields, setFormFields] = useState<Field[]>([]);
   const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdEventData, setCreatedEventData] = useState<{ uuid: string; name: string }>({ uuid: '', name: '' });
 
   // Event form field handlers
   const handleInputChange = (
@@ -225,6 +228,14 @@ const CreateEventForm = () => {
     );
   };
 
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false);
+    // Reset form
+    setFormData(initialFormData);
+    setFormFields([]);
+    setSelectedFieldId(null);
+  };
+
   // Form submission
   const handleSubmit = async  (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -246,6 +257,7 @@ const CreateEventForm = () => {
           maxVotes: formData.place.maxVotes,
         },
         formFields: formFields,
+        closesBy: formData.closesBy || null,
       };
 
       // First validate the structure with Zod
@@ -401,13 +413,25 @@ const CreateEventForm = () => {
           allowUserAdd: formData.place.allowUserAdd,
           maxVotes: formData.place.maxVotes,
         },
-        votingCategories
+        votingCategories,
+        closesBy: formData.closesBy ? new Date(formData.closesBy).toISOString() : null,
       };
 
       // Submit the form
       console.log("Event Data:", eventData);
       const response = await createEvent(eventData);
       console.log(response);
+
+      const eventUUID = response.data.event.eventUUID;
+
+      setCreatedEventData({
+        uuid: eventUUID,
+        name: formData.name
+      });
+
+      setShowSuccessModal(true);
+
+
       toast.custom(() => (
         <div className="bg-white text-green-800 font-medium p-4 rounded-md shadow-lg border-l-4 border-green-600">
           <div className="flex items-start gap-2">
@@ -524,7 +548,16 @@ const CreateEventForm = () => {
             </form>
           </div>
         </div>
+        
+        {/* Event Created Success Modal */}
+        <EventCreatedModal
+          isOpen={showSuccessModal}
+          eventUUID={createdEventData.uuid}
+          eventName={createdEventData.name}
+          onClose={handleCloseSuccessModal}
+        />
       </div>
+      
     </DndProvider>
   );
 };

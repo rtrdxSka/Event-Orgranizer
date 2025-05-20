@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { createEvent, getEventByUUID } from "../services/event.service";
+import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
-import { BAD_REQUEST, OK } from "../constants/http";
+import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
+import { createEventResponseSchema } from "./eventResponse.schemas";
+import { Document } from "mongoose";
+import { EventDocument } from "../models/event.model";
 
 
 export const createEventHandler = catchErrors(async (req: Request, res: Response) => {
@@ -37,3 +40,189 @@ export const getEventByUUIDHandler = catchErrors(async (req, res) => {
 
   return res.status(OK).json(event);
 });
+
+//event Response controller
+
+export const submitEventResponseHandler = catchErrors(async (req: Request, res: Response) => {
+  // Get user ID from the authenticated session
+  const userId = req.userId;
+  
+  // Validate request data
+  const validatedData = createEventResponseSchema.parse(req.body);
+  // Get user email and name from the authenticated user object
+
+await verifyEventAcceptsResponses(validatedData.eventId);
+
+  const userEmail = req.userEmail;
+  appAssert(userEmail, 400, "User email is required");
+
+    await updateEventResponseWithNotifications(
+    userId.toString(),
+    userEmail,
+    validatedData
+  );
+  
+  // Create or update event response
+  const { response, event } = await createOrUpdateEventResponse(
+    userId.toString(),
+    userEmail,
+    validatedData
+  );
+
+  return res.status(CREATED).json({
+    status: "success",
+    data: {
+      response,
+      votingCategories: event.votingCategories
+    }
+  });
+});
+
+export const getEventResponsesHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  
+  const { event, responses } = await getEventResponses(eventId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        description: event.description,
+        votingCategories: event.votingCategories
+      },
+      responses
+    }
+  });
+});
+
+export const getUserEventResponseHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  const response = await getUserEventResponse(eventId, userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: response
+  });
+});
+
+export const getOtherUserResponsesHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  const data = await getOtherUserResponses(eventId, userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data
+  });
+});
+
+export const getUserCreatedEventsHandler = catchErrors(async (req: Request, res: Response) => {
+  const userId = req.userId.toString();
+  
+  // Call the service function
+  const events = await getUserCreatedEvents(userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: events
+  });
+});
+
+export const getUserRespondedEventsHandler = catchErrors(async (req: Request, res: Response) => {
+  const userId = req.userId.toString();
+  
+  // Call the service function
+  const events = await getUserRespondedEvents(userId);
+
+  return res.status(OK).json({
+    status: "success",
+    data: events
+  });
+});
+
+
+export const getEventForOwnerHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  const data = await getEventForOwner(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    data
+  });
+});
+
+//event status controller
+
+export const closeEventHandler = catchErrors(async (req, res) => {
+  const { eventId } = req.params;
+  const userId = req.userId.toString();
+  
+  const event = await closeEvent(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event closed successfully",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        status: event.status
+      }
+    }
+  });
+});
+
+// Reopen an event
+export const reopenEventHandler = catchErrors(async (req, res) => {
+  const { eventId } = req.params;
+  const userId = req.userId.toString();
+  
+  const event = await reopenEvent(eventId, userId);
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event reopened successfully",
+    data: {
+      event: {
+        _id: event._id,
+        name: event.name,
+        status: event.status
+      }
+    }
+  });
+});
+
+// Finalize an event
+export const finalizeEventHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  
+  // Validate the request body
+  appAssert(eventId, BAD_REQUEST, "Event ID is required");
+  
+  const { date, place, customFields } = req.body;
+  
+  // Call the service function
+  const result = await finalizeEvent(eventId, userId, {
+    date,
+    place,
+    customFields
+  });
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Event finalized successfully",
+    data: {
+      event: result.event
+    }
+  });
+});
+
+

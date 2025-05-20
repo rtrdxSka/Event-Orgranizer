@@ -69,6 +69,11 @@ export const validateRadioField = (field: RadioField): string | true => {
   if (field.options.length < 2) {
     return "Radio fields must have at least 2 options";
   }
+
+  const labels = field.options.map(opt => opt.label.toLowerCase());
+  if (new Set(labels).size !== labels.length) {
+    return "Radio options cannot contain duplicate labels (case-insensitive)";
+  }
   
   return true;
 };
@@ -106,6 +111,11 @@ export const validateCheckboxField = (field: CheckboxField): string | true => {
   if (field.options.length < 1) {
     return "Checkbox fields must have at least 1 option";
   }
+
+  const labels = field.options.map(opt => opt.label.toLowerCase());
+  if (new Set(labels).size !== labels.length) {
+    return "Checkbox options cannot contain duplicate labels (case-insensitive)";
+  }
   
   return true;
 };
@@ -124,6 +134,11 @@ export type ListField = z.infer<typeof listFieldSchema>;
 // Additional validation for list fields
 export const validateListField = (field: ListField): string | true => {
   const nonEmptyValues = field.values.filter(v => v.trim() !== '');
+
+  const lowerCaseValues = nonEmptyValues.map(v => v.toLowerCase());
+  if (new Set(lowerCaseValues).size !== lowerCaseValues.length) {
+    return "List entries cannot contain duplicates";
+  }
   
   if (field.readonly) {
 
@@ -153,9 +168,10 @@ export const validateListField = (field: ListField): string | true => {
     // Check if users can add entries
     if (!field.allowUserAdd) {
       // If users can't add entries, we must provide an empty field
-      if (!hasEmptyField) {
-        return "Must include an empty field for user input since users cannot add their own entries";
-      }
+      // if (!hasEmptyField) {
+      //   return "Must include an empty field for user input since users cannot add their own entries";
+      // }
+      return "Non-readonly list fields must allow users to add entries"
     } else {
       // If users can add entries, either need an empty field or room for more
       if (!hasEmptyField && !hasRoomForMore) {
@@ -269,6 +285,29 @@ export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | tru
   return true;
 };
 
+export const validateClosesBy = (closesBy: string | null): string | true => {
+  // If not provided, it's valid (will default to null in the database)
+  if (!closesBy || closesBy.trim() === '') {
+    return true;
+  }
+  
+  // Parse the date and check if it's valid
+  const closeDate = new Date(closesBy);
+  if (isNaN(closeDate.getTime())) {
+    return "Invalid date format";
+  }
+  
+  // Check if it's not a past date
+  const now = new Date();
+  now.setHours(0, 0, 0, 0); // Set to beginning of today for fair comparison
+  
+  if (closeDate < now) {
+    return "Closing date cannot be in the past";
+  }
+  
+  return true;
+};
+
 // Main event form schema
 export const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
@@ -276,12 +315,52 @@ export const eventFormSchema = z.object({
   eventDates: eventDatesSchema,
   place: eventPlaceSchema,
   formFields: z.array(fieldSchema),
+  closesBy: z.string().nullable().optional(),
 });
 
 export type EventFormSchema = z.infer<typeof eventFormSchema>;
 
+// Add this function to validate field titles are unique across all fields
+export const validateUniqueFieldTitles = (formFields: FieldSchema[]): string | true => {
+  // Extract all titles and convert to lowercase for case-insensitive comparison
+  const fieldTitles = formFields.map(field => field.title.toLowerCase().trim());
+  
+  // Check if there are duplicates by comparing the length of the array to the size of a Set made from it
+  if (new Set(fieldTitles).size !== fieldTitles.length) {
+    // Find the duplicate titles
+    const duplicates = fieldTitles.filter((title, index) => 
+      fieldTitles.indexOf(title) !== index
+    );
+    
+    // Get the first duplicate to mention in the error message
+    const firstDuplicate = duplicates[0];
+    const originalTitle = formFields.find(f => f.title.toLowerCase().trim() === firstDuplicate)?.title;
+    
+    return `Duplicate field title found: "${originalTitle}". All field titles must be unique.`;
+  }
+  
+  return true;
+};
+
 // Validate the entire form
 export const validateForm = (data: EventFormSchema): string | true => {
+
+
+    if ('closesBy' in data) {
+    const closesByValidation = validateClosesBy(data.closesBy);
+    if (closesByValidation !== true) {
+      return `Closing Date: ${closesByValidation}`;
+    }
+  }
+  // First validate that all field titles are unique
+  if (data.formFields.length > 0) {
+    const titleValidation = validateUniqueFieldTitles(data.formFields);
+    if (titleValidation !== true) {
+      return titleValidation;
+    }
+  }
+
+
   // Validate event dates
   const dateValidation = validateEventDates(data.eventDates);
   const placeValidation = validateEventPlaces(data.place);
