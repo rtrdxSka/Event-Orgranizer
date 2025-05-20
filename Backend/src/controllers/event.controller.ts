@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
+import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getFinalizedEventData, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
 import { createEventResponseSchema } from "./eventResponse.schemas";
@@ -224,5 +224,20 @@ export const finalizeEventHandler = catchErrors(async (req: Request, res: Respon
     }
   });
 });
+
+export const getFinalizedEventHandler = catchErrors(async (req: Request, res: Response) => {
+  const { eventUUID } = req.params;
+  
+  // Make sure UUID exists
+  appAssert(eventUUID, BAD_REQUEST, "Event UUID is required");
+  
+  // Get the finalized event data from the service
+  const data = await getFinalizedEventData(eventUUID);
+
+  return res.status(OK).json({
+    status: "success",
+    data
+  });
+})
 
 

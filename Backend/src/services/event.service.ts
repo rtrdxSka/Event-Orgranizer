@@ -1534,3 +1534,42 @@ export const finalizeEvent = async (
     finalizedEvent
   };
 };
+
+export const getFinalizedEventData = async (eventUUID: string) => {
+  // Fetch the event by UUID
+  const event = await EventModel.findOne({ eventUUID });
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Check if this event is finalized
+  appAssert(event.status === 'finalized', BAD_REQUEST, "This event hasn't been finalized yet");
+  
+  // Get the finalized event details
+  const finalizedEvent = await FinalizedEventModel.findOne({ eventId: event._id });
+  appAssert(finalizedEvent, NOT_FOUND, "Finalized event data not found");
+  
+  // Get organizer info
+  const organizer = await UserModel.findById(event.createdBy);
+  appAssert(organizer, NOT_FOUND, "Event organizer not found");
+  
+  return {
+    event: {
+      _id: event._id,
+      name: event.name,
+      description: event.description,
+      eventUUID: event.eventUUID,
+      status: event.status,
+      createdBy: event.createdBy,
+      createdAt: event.createdAt
+    },
+    finalizedEvent: {
+      finalizedDate: finalizedEvent.finalizedDate,
+      finalizedPlace: finalizedEvent.finalizedPlace,
+      customFieldSelections: finalizedEvent.customFieldSelections,
+      finalizedAt: finalizedEvent.finalizedAt,
+      finalizedBy: finalizedEvent.finalizedBy
+    },
+    organizer: {
+      email: organizer.email,
+    }
+  };
+};

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { closeEventHandler, createEventHandler, finalizeEventHandler, getEventByUUIDHandler, getEventForOwnerHandler, getEventResponsesHandler, getOtherUserResponsesHandler, getUserCreatedEventsHandler, getUserEventResponseHandler, getUserRespondedEventsHandler, reopenEventHandler, submitEventResponseHandler } from "../controllers/event.controller";
+import { closeEventHandler, createEventHandler, finalizeEventHandler, getEventByUUIDHandler, getEventForOwnerHandler, getEventResponsesHandler, getFinalizedEventHandler, getOtherUserResponsesHandler, getUserCreatedEventsHandler, getUserEventResponseHandler, getUserRespondedEventsHandler, reopenEventHandler, submitEventResponseHandler } from "../controllers/event.controller";
 import authenticate from "../middleware/authenticate";
 
 const eventRoutes = Router();
@@ -17,4 +17,5 @@ eventRoutes.get("/:eventId/edit", authenticate, getEventForOwnerHandler);
 eventRoutes.patch("/:eventId/close", authenticate, closeEventHandler);
 eventRoutes.patch("/:eventId/reopen", authenticate, reopenEventHandler);
 eventRoutes.post("/:eventId/finalize", authenticate, finalizeEventHandler);
+eventRoutes.get("/finalized/:eventUUID", getFinalizedEventHandler);
 export default eventRoutes;
