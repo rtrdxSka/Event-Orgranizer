@@ -14,6 +14,7 @@ import CreateEvent from "./pages/CreateEvent"
 import EventSubmit from "./pages/EventSubmit"
 import MyEvents from "./pages/MyEvents"
 import EventEdit from "./pages/EventEdit"
+import FinalizedEventView from "./pages/FinalizedEventView"
 
 
 function App() {
@@ -62,6 +63,8 @@ function App() {
       />
 
 <Route path="/event/edit/:eventId" element={<ProtectedRoute><EventEdit /></ProtectedRoute>} />
+
+<Route path="/event/finalized/:eventUUID" element={<FinalizedEventView />} />
 
       {/* Guest Routes */}
       <Route 
