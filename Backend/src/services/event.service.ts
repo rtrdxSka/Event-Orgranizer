@@ -1031,6 +1031,7 @@ interface ChartOptionData {
   optionName: string;
   voteCount: number;
   voters: mongoose.Types.ObjectId[];
+  voterDetails?: Array<{ _id: string; email: string; name?: string }>;
   addedBy?: mongoose.Types.ObjectId | null;
   isOriginal?: boolean;
 }
@@ -1207,6 +1208,19 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
             isOriginal: originalValues.includes(value)
           };
         });
+
+        originalValues.forEach(value => {
+  // Skip if already added
+  if (!options.some(opt => opt.optionName === value)) {
+    options.push({
+      optionName: value,
+      voteCount: 0,
+      voters: [],
+      voterDetails: [],
+      isOriginal: true
+    });
+  }
+});
         
         // Add to list fields data
         listFieldsData.push({
