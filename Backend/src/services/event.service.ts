@@ -9,7 +9,7 @@ import EventResponseModel from "../models/eventResponse.model";
 import { CreateEventResponseInput } from "../controllers/eventResponse.schemas";
 
 import { sendMail } from "../utils/sendMail";
-import { getNewOptionsAddedTemplate } from "../utils/emailTemplates";
+import { getEventFinalizedTemplate, getNewOptionsAddedTemplate } from "../utils/emailTemplates";
 import { APP_ORIGIN } from "../constants/env";
 import FinalizedEventModel from "../models/FinalizedEvent";
 
@@ -1540,6 +1540,53 @@ export const finalizeEvent = async (
   event.eventDate = selections.date ? new Date(selections.date) : null;
   event.place = selections.place;
   await event.save();
+
+
+  // Send email notifications to all participants
+  try {
+    // Get all users who have responded to this event
+    const participants = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId)
+    }).distinct('userEmail');
+    
+    if (participants.length > 0) {
+      // Create the finalized event URL
+      const finalizedEventUrl = `${APP_ORIGIN}/event/finalized/${event.eventUUID}`;
+      
+      // Send notification emails in the background (don't wait)
+      Promise.all(participants.map(async (participantEmail) => {
+        try {
+          const { data, error } = await sendMail({
+            to: participantEmail,
+            ...getEventFinalizedTemplate(
+              event.name,
+              selections.date,
+              selections.place,
+              customFieldSelections,
+              finalizedEventUrl
+            )
+          });
+          
+          if (error) {
+            console.error(`Error sending finalization notification to ${participantEmail}:`, error);
+          } else {
+            console.log(`Finalization notification sent successfully to ${participantEmail}`);
+          }
+        } catch (emailError) {
+          console.error(`Failed to send finalization email to ${participantEmail}:`, emailError);
+        }
+      }))
+      .then(() => {
+        console.log(`Sent finalization notifications to ${participants.length} participants`);
+      })
+      .catch((error) => {
+        console.error('Error sending finalization notification emails:', error);
+      });
+    }
+  } catch (error) {
+    // Log the error but don't fail the finalization process
+    console.error('Error while sending finalization emails:', error);
+  }
   
   // Send notifications to participants (implement later)
   
