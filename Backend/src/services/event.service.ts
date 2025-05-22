@@ -1587,3 +1587,430 @@ export const getFinalizedEventData = async (eventUUID: string) => {
     }
   };
 };
+
+/**
+ * Remove an option from an event category and update affected user responses
+ */
+// export const removeEventOption = async (
+//   eventId: string,
+//   userId: string,
+//   categoryName: string,
+//   optionName: string,
+//   fieldId?: string
+// ): Promise<any> => {
+//   console.log(`Removing option "${optionName}" from category "${categoryName}" with fieldId "${fieldId}"`);
+  
+//   // Verify user exists
+//   const userExists = await UserModel.exists({
+//     _id: new mongoose.Types.ObjectId(userId)
+//   });
+  
+//   appAssert(userExists, NOT_FOUND, "User not found");
+
+//   // Find the event and ensure this user is the owner
+//   const event = await EventModel.findById(eventId);
+//   appAssert(event, NOT_FOUND, "Event not found");
+  
+//   // Verify this user is the event creator
+//   appAssert(
+//     event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+//     FORBIDDEN,
+//     "Only the event creator can modify this event"
+//   );
+  
+//   // Verify event is not finalized
+//   appAssert(
+//     event.status !== 'finalized',
+//     BAD_REQUEST,
+//     "Event is already finalized and cannot be modified"
+//   );
+  
+//   // Find the category
+//   const categoryIndex = event.votingCategories.findIndex(
+//     cat => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+//   );
+  
+//   appAssert(categoryIndex !== -1, NOT_FOUND, `Category '${categoryName}' not found`);
+  
+//   const category = event.votingCategories[categoryIndex];
+  
+//   // Find the option
+//   const optionIndex = category.options.findIndex(
+//     opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+//   );
+  
+//   appAssert(optionIndex !== -1, NOT_FOUND, `Option '${optionName}' not found in category '${categoryName}'`);
+  
+//   // Ensure there will be at least one option left
+//   appAssert(
+//     category.options.length > 1,
+//     BAD_REQUEST,
+//     `Cannot remove the only option in category '${categoryName}'`
+//   );
+  
+//   // Get the option to be removed (for tracking affected users)
+//   const removedOption = category.options[optionIndex];
+  
+//   // Remove the option from the category
+//   category.options.splice(optionIndex, 1);
+  
+//   // Save the updated event
+//   await event.save();
+  
+//   // Get affected user IDs
+//   const affectedUserIds = removedOption.votes.map(userId => userId.toString());
+  
+//   // Update user responses in bulk using MongoDB update operators
+//   try {
+//     // For date category
+//     if (categoryName.toLowerCase() === 'date') {
+//       await EventResponseModel.updateMany(
+//         { eventId: new mongoose.Types.ObjectId(eventId) },
+//         { $pull: { suggestedDates: optionName } }
+//       );
+//     }
+//     // For place category
+//     else if (categoryName.toLowerCase() === 'place') {
+//       await EventResponseModel.updateMany(
+//         { eventId: new mongoose.Types.ObjectId(eventId) },
+//         { $pull: { suggestedPlaces: optionName } }
+//       );
+//     }
+    
+//     // For custom fields with a provided fieldId
+//     if (fieldId) {
+//       // Create a properly typed update query
+//       const updatePath = `suggestedOptions.${fieldId}`;
+      
+//       // Use MongoDB's updateMany with a properly structured update
+//       await EventResponseModel.updateMany(
+//         { eventId: new mongoose.Types.ObjectId(eventId) },
+//         { $pull: { [updatePath]: optionName } }
+//       );
+      
+//       console.log(`Updated responses using path: ${updatePath}`);
+//     }
+//   } catch (error) {
+//     console.error('Error updating user responses:', error);
+//     // Continue execution - don't throw an error here
+//   }
+  
+//   return {
+//     event: {
+//       _id: event._id,
+//       name: event.name,
+//       status: event.status
+//     },
+//     affectedUsers: affectedUserIds.length
+//   };
+// };
+
+export const removeEventOption = async (
+  eventId: string,
+  userId: string,
+  categoryName: string,
+  optionName: string,
+  fieldId?: string
+): Promise<any> => {
+  console.log(`Removing option "${optionName}" from category "${categoryName}" with fieldId "${fieldId}"`);
+  
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event and ensure this user is the owner
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can modify this event"
+  );
+  
+  // Verify event is not finalized
+  appAssert(
+    event.status !== 'finalized',
+    BAD_REQUEST,
+    "Event is already finalized and cannot be modified"
+  );
+  
+  // Find the fieldId if not provided (by matching category name with customFields titles)
+  let effectiveFieldId = fieldId;
+  if (!effectiveFieldId && event.customFields) {
+    // Look through all customFields to find a matching title
+    for (const [key, field] of event.customFields.entries()) {
+      if (field.title === categoryName) {
+        effectiveFieldId = key;
+        console.log(`Found matching fieldId ${effectiveFieldId} for category ${categoryName}`);
+        break;
+      }
+    }
+  }
+  
+  // Different handling paths based on field type
+  let isCustomField = false;
+  
+  // 1. First, try to update customFields if we have a fieldId
+  if (effectiveFieldId && event.customFields && event.customFields.has(effectiveFieldId)) {
+    isCustomField = true;
+    const customField = event.customFields.get(effectiveFieldId);
+    
+    // Check if this is a field with options (radio, checkbox)
+    if (customField && customField.options && Array.isArray(customField.options)) {
+      // Find the option in the field options using case-insensitive comparison
+      const fieldOptionIndex = customField.options.findIndex(
+        (opt: { label?: string; id?: number }) => opt.label && opt.label.toLowerCase() === optionName.toLowerCase()
+      );
+      
+      // If found, remove it
+      if (fieldOptionIndex !== -1) {
+        console.log(`Removing option "${optionName}" from customFields[${effectiveFieldId}].options`);
+        
+        // Make sure there's more than one option for radio/checkbox fields
+        appAssert(
+          customField.options.length > 1,
+          BAD_REQUEST,
+          `Cannot remove the only option in field '${categoryName}'`
+        );
+        
+        customField.options.splice(fieldOptionIndex, 1);
+        
+        // Update the field in the Map
+        event.customFields.set(effectiveFieldId, customField);
+        
+        // Explicitly mark the customFields as modified
+        event.markModified(`customFields`);
+      } else {
+        console.log(`Option "${optionName}" not found in customFields[${effectiveFieldId}].options`);
+      }
+    } else if (customField && customField.type === 'list' && customField.values && Array.isArray(customField.values)) {
+      // For list fields, remove from values array
+      const valueIndex = customField.values.findIndex(
+        (value: string) => value.toLowerCase() === optionName.toLowerCase()
+      );
+      
+      if (valueIndex !== -1) {
+        console.log(`Removing value "${optionName}" from customFields[${effectiveFieldId}].values`);
+        
+        // Make sure there's more than one value for list fields
+        appAssert(
+          customField.values.length > 1,
+          BAD_REQUEST,
+          `Cannot remove the only value in list field '${categoryName}'`
+        );
+        
+        customField.values.splice(valueIndex, 1);
+        
+        // Update the field in the Map
+        event.customFields.set(effectiveFieldId, customField);
+        
+        // Explicitly mark the customFields as modified
+        event.markModified(`customFields`);
+      }
+    }
+  }
+  
+  // 2. Then, handle date/place categories regardless of custom field processing
+  if (categoryName.toLowerCase() === 'date' && event.eventDates && event.eventDates.dates) {
+    isCustomField = false; // This is a built-in category
+    // Remove from the dates array if it exists there
+    const dateIndex = event.eventDates.dates.findIndex(
+      (date) => date.toLowerCase() === optionName.toLowerCase()
+    );
+    
+    if (dateIndex !== -1) {
+      console.log(`Removing date "${optionName}" from eventDates.dates`);
+      
+      // Make sure there's more than one date
+      appAssert(
+        event.eventDates.dates.length > 1,
+        BAD_REQUEST,
+        `Cannot remove the only date in event date options`
+      );
+      
+      event.eventDates.dates.splice(dateIndex, 1);
+      
+      // Explicitly mark the eventDates as modified
+      event.markModified('eventDates');
+    }
+  } else if (categoryName.toLowerCase() === 'place' && event.eventPlaces && event.eventPlaces.places) {
+    isCustomField = false; // This is a built-in category
+    // Remove from the places array if it exists there
+    const placeIndex = event.eventPlaces.places.findIndex(
+      (place) => place.toLowerCase() === optionName.toLowerCase()
+    );
+    
+    if (placeIndex !== -1) {
+      console.log(`Removing place "${optionName}" from eventPlaces.places`);
+      
+      // Make sure there's more than one place
+      appAssert(
+        event.eventPlaces.places.length > 1,
+        BAD_REQUEST,
+        `Cannot remove the only place in event place options`
+      );
+      
+      event.eventPlaces.places.splice(placeIndex, 1);
+      
+      // Explicitly mark the eventPlaces as modified
+      event.markModified('eventPlaces');
+    }
+  }
+  
+  // 3. Finally, handle voting categories if not already handled as a custom field
+  let affectedUserIds: string[] = [];
+  if (!isCustomField) {
+    // Find the category
+    const categoryIndex = event.votingCategories.findIndex(
+      cat => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+    );
+    
+    if (categoryIndex !== -1) {
+      const category = event.votingCategories[categoryIndex];
+      
+      // Find the option
+      const optionIndex = category.options.findIndex(
+        opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+      );
+      
+      if (optionIndex !== -1) {
+        // Ensure there will be at least one option left
+        appAssert(
+          category.options.length > 1,
+          BAD_REQUEST,
+          `Cannot remove the only option in category '${categoryName}'`
+        );
+        
+        // Get the option to be removed (for tracking affected users)
+        const removedOption = category.options[optionIndex];
+        affectedUserIds = removedOption.votes.map(userId => userId.toString());
+        
+        // Remove the option from the category
+        category.options.splice(optionIndex, 1);
+        
+        // Explicitly mark the votingCategories as modified
+        event.markModified('votingCategories');
+      }
+    }
+  }
+  
+  // Save the updated event
+  await event.save();
+  
+  // Update user responses in bulk using MongoDB update operators
+  try {
+    // For date category
+    if (categoryName.toLowerCase() === 'date') {
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { suggestedDates: optionName } }
+      );
+    }
+    // For place category
+    else if (categoryName.toLowerCase() === 'place') {
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { suggestedPlaces: optionName } }
+      );
+    }
+    
+    // For custom fields with a provided fieldId
+    if (effectiveFieldId) {
+      // Create a properly typed update query for suggestedOptions
+      const suggestedOptionsPath = `suggestedOptions.${effectiveFieldId}`;
+      
+      // Use MongoDB's updateMany with a properly structured update for suggestedOptions
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { [suggestedOptionsPath]: optionName } }
+      );
+      
+      console.log(`Updated suggestedOptions using path: ${suggestedOptionsPath}`);
+      
+      // Get the customField to determine its type
+      const customField = event.customFields?.get(effectiveFieldId);
+      
+      if (customField) {
+        // For text fields - remove matching responses
+        if (customField.type === 'text') {
+          await EventResponseModel.updateMany(
+            { 
+              eventId: new mongoose.Types.ObjectId(eventId),
+              "fieldResponses": { 
+                $elemMatch: { 
+                  fieldId: effectiveFieldId, 
+                  type: 'text', 
+                  response: optionName 
+                } 
+              }
+            },
+            { 
+              $pull: { 
+                "fieldResponses": { 
+                  fieldId: effectiveFieldId, 
+                  type: 'text', 
+                  response: optionName 
+                } 
+              } 
+            }
+          );
+          
+          console.log(`Removed text responses matching "${optionName}" for field "${effectiveFieldId}"`);
+        }
+        // For list fields - remove the item from array responses
+        else if (customField.type === 'list') {
+          // First approach: Find all responses with this field
+          const responses = await EventResponseModel.find({
+            eventId: new mongoose.Types.ObjectId(eventId),
+            "fieldResponses.fieldId": effectiveFieldId,
+            "fieldResponses.type": "list"
+          });
+          
+          // Update each response individually to properly handle the array
+          for (const response of responses) {
+            // Find the specific fieldResponse
+            const fieldResponseIndex = response.fieldResponses.findIndex(
+              fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
+            );
+            
+            if (fieldResponseIndex !== -1) {
+              const fieldResponse = response.fieldResponses[fieldResponseIndex];
+              
+              // Remove the option from the array if it exists
+              if (Array.isArray(fieldResponse.response)) {
+                const responseArray = fieldResponse.response;
+                const newResponseArray = responseArray.filter(
+                  (item) => item !== optionName
+                );
+                
+                // Only update if something changed
+                if (newResponseArray.length !== responseArray.length) {
+                  response.fieldResponses[fieldResponseIndex].response = newResponseArray;
+                  await response.save();
+                  console.log(`Removed "${optionName}" from list response for user ${response.userId}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error updating user responses:', error);
+    // Continue execution - don't throw an error here
+  }
+  
+  return {
+    event: {
+      _id: event._id,
+      name: event.name,
+      status: event.status
+    },
+    affectedUsers: affectedUserIds.length
+  };
+};
