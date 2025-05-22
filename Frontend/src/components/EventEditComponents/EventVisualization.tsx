@@ -9,13 +9,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, ListChecks, MessageSquare, Check, UserIcon, List } from 'lucide-react';
+import { Calendar, MapPin, ListChecks, MessageSquare, Check, UserIcon, List, Trash2 } from 'lucide-react';
 import { 
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+
+import { toast } from "sonner";
+import { removeEventOption } from "@/lib/api";
+import ConfirmDialog from './ConfirmDialog';
 
 // Define types for our component
 interface Voter {
@@ -127,6 +132,14 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
   // State for text field selection
   const [selectedTextResponses, setSelectedTextResponses] = useState<Record<string, string>>({});
 
+  // State for confirm dialog
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [optionToDelete, setOptionToDelete] = useState<{
+    categoryName: string;
+    optionName: string;
+    fieldId?: string;
+  } | null>(null);
+
   // Format date for display
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -178,7 +191,7 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
     return false;
   };
 
-    const getMaxOptions = (categoryName: string): number => {
+  const getMaxOptions = (categoryName: string): number => {
     const category = categoryName.toLowerCase();
     
     if (category === 'date' && eventData.event.eventDates) {
@@ -352,8 +365,110 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
     }
   };
 
+  const getFieldIdFromCategoryName = (categoryName: string): string | undefined => {
+  // Skip date and place categories as they don't need fieldIds
+  if (categoryName.toLowerCase() === 'date' || categoryName.toLowerCase() === 'place') {
+    return undefined;
+  }
+  
+  // Try to find the matching field in customFields
+  if (eventData.event.customFields) {
+    for (const [key, field] of Object.entries(eventData.event.customFields)) {
+      if (field.title === categoryName) {
+        return key;
+      }
+    }
+  }
+  
+  return undefined;
+};
+
+  // Check if option can be deleted (ensure at least one option remains)
+  const canDeleteOption = (categoryName: string, optionName: string): boolean => {
+    // Find the category
+    const category = eventData.chartsData.find(c => c.categoryName === categoryName);
+    if (category && category.options.length <= 1) {
+      return false; // Can't delete if it's the only option
+    }
+    return true;
+  };
+
+  // Check if list field option can be deleted
+  const canDeleteListOption = (fieldId: string, optionName: string): boolean => {
+    const field = eventData.listFieldsData?.find(f => f.fieldId === fieldId);
+    if (field && field.options.length <= 1) {
+      return false; // Can't delete if it's the only option
+    }
+    return true;
+  };
+
+  // Handle option deletion
+const handleDeleteOption = async () => {
+  if (!optionToDelete) return;
+  
+  const { categoryName, optionName, fieldId } = optionToDelete;
+  
+  try {
+    // Call the API to delete the option
+    await removeEventOption(
+      eventData.event._id,
+      categoryName,
+      optionName,
+      fieldId
+    );
+    console.log(`Deleting option "${optionName}" from category "${categoryName}" with fieldId "${fieldId}"`);
+    
+    // Show success message
+    toast.success(`Option "${optionName}" removed successfully`);
+    
+    // Refresh the page to reflect the changes
+    // window.location.reload();
+  } catch (error) {
+    console.error("Error removing option:", error);
+    toast.error("Failed to remove option. Please try again.");
+  } finally {
+    // Close the confirm dialog
+    setIsConfirmOpen(false);
+    setOptionToDelete(null);
+  }
+};
+
+  // Open confirm dialog for deleting an option
+const openDeleteConfirm = (categoryName: string, optionName: string, fieldId?: string) => {
+  // If fieldId is not provided, try to find it from category name
+  const effectiveFieldId = fieldId || getFieldIdFromCategoryName(categoryName);
+  
+  // First check if we can delete this option
+  const canDelete = effectiveFieldId 
+    ? canDeleteListOption(effectiveFieldId, optionName)
+    : canDeleteOption(categoryName, optionName);
+  
+  if (!canDelete) {
+    toast.error("Cannot delete the only option in a category. At least one option must remain.");
+    return;
+  }
+  
+  setOptionToDelete({ categoryName, optionName, fieldId: effectiveFieldId });
+  setIsConfirmOpen(true);
+};
+
   return (
     <div>
+      {/* Confirm Dialog for Option Deletion */}
+      <ConfirmDialog
+        isOpen={isConfirmOpen}
+        onClose={() => {
+          setIsConfirmOpen(false);
+          setOptionToDelete(null);
+        }}
+        onConfirm={handleDeleteOption}
+        title="Delete Option"
+        description={`Are you sure you want to delete "${optionToDelete?.optionName}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        destructive={true}
+      />
+
       {/* All Categories, List Fields and Text Fields as Tabs */}
       <Tabs 
         defaultValue={activeTab} 
@@ -478,16 +593,29 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
                           </div>
                           
                           {/* Show selected option if it's not the top one */}
-                          {selectedOptions[`category-${category.categoryName}-${groupIndex}`] && 
-                           selectedOptions[`category-${category.categoryName}-${groupIndex}`] !== optionGroup[0].optionName && (
+                          {selectedOptions[`category-${category.categoryName}-${groupIndex}`] && (
                             <div className="mt-2 bg-purple-700/30 rounded-lg p-3 border border-purple-600/30">
-                              <div className="flex items-center gap-2">
-                                <Check className="h-4 w-4 text-green-400" />
-                                <div className="text-purple-100 font-medium">
-                                  Selected: {category.categoryName.toLowerCase() === 'date' 
-                                    ? formatDate(selectedOptions[`category-${category.categoryName}-${groupIndex}`]) 
-                                    : selectedOptions[`category-${category.categoryName}-${groupIndex}`]}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Check className="h-4 w-4 text-green-400" />
+                                  <div className="text-purple-100 font-medium">
+                                    Selected: {category.categoryName.toLowerCase() === 'date' 
+                                      ? formatDate(selectedOptions[`category-${category.categoryName}-${groupIndex}`]) 
+                                      : selectedOptions[`category-${category.categoryName}-${groupIndex}`]}
+                                  </div>
                                 </div>
+                                {/* Delete button for selected option */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                                  onClick={() => openDeleteConfirm(
+                                    category.categoryName,
+                                    selectedOptions[`category-${category.categoryName}-${groupIndex}`]
+                                  )}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                               
                               {/* Show voters for selected option */}
@@ -605,9 +733,27 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
                                 </button>
                                 <span className="truncate max-w-md text-left">{option.optionName}</span>
                               </div>
-                              <Badge className="ml-2 bg-purple-600/50">
-                                {option.voteCount} {option.voteCount === 1 ? 'response' : 'responses'}
-                              </Badge>
+                              <div className="flex items-center">
+                                <Badge className="mr-2 bg-purple-600/50">
+                                  {option.voteCount} {option.voteCount === 1 ? 'response' : 'responses'}
+                                </Badge>
+                                {/* Delete button for list option */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent accordion from opening
+                                    openDeleteConfirm(
+                                      field.categoryName,
+                                      option.optionName,
+                                      field.fieldId
+                                    );
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           </AccordionTrigger>
                           <AccordionContent>
@@ -647,7 +793,7 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
                   </Badge>
                 </CardTitle>
               </CardHeader>
-                              <CardContent>
+              <CardContent>
                 {field.responses.length === 0 ? (
                   <div className="text-center py-10 bg-purple-800/20 rounded-lg">
                     <p className="text-purple-300 italic">No responses yet</p>
@@ -691,9 +837,27 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
                                   <Badge className="bg-purple-600">{response.userEmail}</Badge>
                                   {response.userName && <span className="text-purple-200 text-sm">({response.userName})</span>}
                                 </div>
-                                {isSelected && (
-                                  <Badge className="bg-green-600/30 text-green-200">Selected</Badge>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {isSelected && (
+                                    <Badge className="bg-green-600/30 text-green-200">Selected</Badge>
+                                  )}
+                                  {/* Delete button for text response */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openDeleteConfirm(
+                                        field.categoryName,
+                                        response.response,
+                                        field.fieldId
+                                      );
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                               <div className="bg-purple-800/30 p-3 rounded-md border border-purple-700/50">
                                 <p className="text-purple-100">{response.response}</p>

@@ -71,11 +71,9 @@ export const createFinalizeValidationSchema = (event: any) => {
           
         case 'list':
           // For list fields, the number of selections should match maxEntries if specified
-          if (field.maxEntries && field.maxEntries > 0) {
-            schemaFields[fieldId] = z.array(z.string()).length(field.maxEntries, {
-              message: `Field "${field.title}" requires exactly ${field.maxEntries} selection(s)`
-            });
-          } else {
+          if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
+  return `Cannot exceed ${field.maxEntries} entries`;
+}else {
             // If maxEntries is not specified, require at least one selection
             schemaFields[fieldId] = z.array(z.string()).min(1, {
               message: `Please select at least one option for "${field.title}"`

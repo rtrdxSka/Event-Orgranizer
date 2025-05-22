@@ -135,3 +135,18 @@ export const getFinalizedEvent = async (eventUUID: string): Promise<any> => {
   const response = await API.get(`/event/finalized/${eventUUID}`);
   return response.data;
 };
+
+export const removeEventOption = async (
+  eventId: string, 
+  categoryName: string, 
+  optionName: string, 
+  fieldId?: string
+): Promise<any> => {
+  return API.delete(`/event/${eventId}/option`, {
+    data: {
+      categoryName,
+      optionName,
+      fieldId
+    }
+  });
+};
