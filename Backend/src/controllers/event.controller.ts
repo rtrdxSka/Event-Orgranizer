@@ -3,7 +3,7 @@ import catchErrors from "../utils/catchErrors";
 import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getFinalizedEventData, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, removeEventOption, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
-import { createEventResponseSchema } from "./eventResponse.schemas";
+import { createEventResponseSchema } from "../validations/eventResponse.schemas";
 import { Document } from "mongoose";
 import { EventDocument } from "../models/event.model";
 

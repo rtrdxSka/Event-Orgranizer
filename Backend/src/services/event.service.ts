@@ -4,14 +4,16 @@ import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, FORBIDDEN 
 import EventModel, { EventDocument } from "../models/event.model";
 import UserModel from "../models/user.model";
 import appAssert from "../utils/appAssert";
-import { CreateEventInput, createEventSchema } from "../controllers/event.schemas";
+import { CreateEventInput, createEventSchema } from "../validations/event.schemas";
 import EventResponseModel from "../models/eventResponse.model";
-import { CreateEventResponseInput } from "../controllers/eventResponse.schemas";
+import { CreateEventResponseInput } from "../validations/eventResponse.schemas";
 
 import { sendMail } from "../utils/sendMail";
 import { getEventFinalizedTemplate, getNewOptionsAddedTemplate } from "../utils/emailTemplates";
 import { APP_ORIGIN } from "../constants/env";
 import FinalizedEventModel from "../models/FinalizedEvent";
+import { validateEventResponseDataOrThrow } from "../validations/eventResponse.validation";
+import { validateAndConvertCustomFields } from "../validations/customFieldValidation";
 
 interface CustomFieldOption {
   id: number;
@@ -80,83 +82,9 @@ export const createEvent = async (data: CreateEventInput) => {
     const filteredPlaces = data.eventPlaces.places.filter(place => place.trim() !== "");
 
     // Convert customFields to Map with proper validation
-    const customFieldsMap = new Map();
-    if (data.customFields) {
-      // First validate each custom field
-      Object.entries(data.customFields).forEach(([key, field]) => {
-        // Perform additional validation based on field type
-        switch (field.type) {
-          case "text":
-            // Text fields validation - ensure value is properly set
-            if (field.readonly && (!field.value || field.value.trim() === "")) {
-              appAssert(false, BAD_REQUEST, `Read-only text field "${field.title}" must have a value`);
-            }
-            break;
-
-          case "radio":
-            // Radio fields validation
-            if (field.options.length < 2) {
-              appAssert(false, BAD_REQUEST, `Radio field "${field.title}" must have at least 2 options`);
-            }
-            if (field.readonly && field.selectedOption === null) {
-              appAssert(false, BAD_REQUEST, `Read-only radio field "${field.title}" must have a selected option`);
-            }
-            // Validate option labels
-            field.options.forEach((option, index) => {
-              if (!option.label || option.label.trim() === "") {
-                appAssert(false, BAD_REQUEST, `Option ${index + 1} in field "${field.title}" must have a label`);
-              }
-            });
-            break;
-
-          case "checkbox":
-            // Checkbox fields validation
-            if (field.options.length < 1) {
-              appAssert(false, BAD_REQUEST, `Checkbox field "${field.title}" must have at least 1 option`);
-            }
-            // Validate option labels
-            field.options.forEach((option, index) => {
-              if (!option.label || option.label.trim() === "") {
-                appAssert(false, BAD_REQUEST, `Option ${index + 1} in field "${field.title}" must have a label`);
-              }
-            });
-            break;
-
-          case "list":
-            // List fields validation
-            if (field.readonly) {
-              if (field.allowUserAdd) {
-                appAssert(false, BAD_REQUEST, `Read-only list field "${field.title}" cannot allow users to add entries`);
-              }
-              if (field.maxEntries > 0 && field.values.length !== field.maxEntries) {
-                appAssert(false, BAD_REQUEST, `Read-only list field "${field.title}" must have exactly ${field.maxEntries} entries, but has ${field.values.length}`);
-              }
-              if (field.values.some(v => !v || v.trim() === "")) {
-                appAssert(false, BAD_REQUEST, `All entries in read-only list field "${field.title}" must have values`);
-              }
-            } else{
-              const hasEmptyField = field.values.some(v => v.trim() === '');
-              const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
-              if (!field.allowUserAdd) {
-                appAssert(false, BAD_REQUEST, `List field "${field.title}" must allow users to add entries`);
-              }else{
-                
-                if (!hasEmptyField && !hasRoomForMore) {
-                  appAssert(false, BAD_REQUEST, `List field "${field.title}" is full and does not allow more entries`);
-                }
-              }
-            }
-            // Validate max entries
-            if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
-              appAssert(false, BAD_REQUEST, `Number of entries in list field "${field.title}" (${field.values.length}) exceeds maximum allowed (${field.maxEntries})`);
-            }
-            break;
-        }
-
-        // Add validated field to the map
-        customFieldsMap.set(key, field);
-      });
-    }
+    const customFieldsMap = data.customFields 
+      ? validateAndConvertCustomFields(data.customFields)
+      : new Map();
 
     // Prepare voting categories if not provided
     let votingCategories = data.votingCategories || [];
@@ -257,6 +185,8 @@ export const createOrUpdateEventResponse = async (
   // Verify event exists
   const event = await EventModel.findById(data.eventId);
   appAssert(event, NOT_FOUND, "Event not found");
+
+  validateEventResponseDataOrThrow(data, event);
 
   // Verify user exists
   const user = await UserModel.findById(userId);

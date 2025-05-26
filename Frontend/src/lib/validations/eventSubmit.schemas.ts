@@ -215,9 +215,9 @@ export const validateEventSubmit = (data: EventSubmitFormData): true | string =>
             o => o.id.toString() === optionId
           );
           
-          if (!optionExists && !fieldDefinition.allowUserAddOptions) {
-            return `Selected invalid option for "${fieldDefinition.title}"`;
-          }
+          // if (!optionExists && !fieldDefinition.allowUserAddOptions) {
+          //   return `Selected invalid option for "${fieldDefinition.title}"`;
+          // }
         }
       }
     }
