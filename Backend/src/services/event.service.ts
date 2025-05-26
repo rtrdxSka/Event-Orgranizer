@@ -14,6 +14,7 @@ import { APP_ORIGIN } from "../constants/env";
 import FinalizedEventModel from "../models/FinalizedEvent";
 import { validateEventResponseDataOrThrow } from "../validations/eventResponse.validation";
 import { validateAndConvertCustomFields } from "../validations/customFieldValidation";
+import { finalizeEventRequestSchema } from "../validations/eventFinalize.schemas";
 
 interface CustomFieldOption {
   id: number;
@@ -1351,6 +1352,14 @@ export const finalizeEvent = async (
   });
   
   appAssert(userExists, NOT_FOUND, "User not found");
+
+    const validationResult = finalizeEventRequestSchema.safeParse(selections);
+  if (!validationResult.success) {
+    const firstError = validationResult.error.errors[0];
+    appAssert(false, BAD_REQUEST, `Invalid request: ${firstError.message} at ${firstError.path.join('.')}`);
+  }
+  
+  const { date, place, customFields } = validationResult.data;
 
   // Find the event and ensure this user is the owner
   const event = await EventModel.findById(eventId);
