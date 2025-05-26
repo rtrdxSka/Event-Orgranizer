@@ -1,15 +1,26 @@
+// Updated FinalizedEventView.tsx with Google Calendar integration
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getFinalizedEvent } from '@/lib/api';
+import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import Navbar from '@/components/NavBar';
-import { Calendar, MapPin, CheckCircle, UserCircle, Clock, ListChecks, AlertCircle } from 'lucide-react';
+import { Calendar, MapPin, CheckCircle, UserCircle, Clock, ListChecks, AlertCircle, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, XCircle } from 'lucide-react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import GoogleCalendarTest from './GoogleCalendarTest';
 
-// Define types for finalized event data
+// Define types for finalized event data (same as before)
 interface CustomFieldSelection {
   fieldId: string;
   fieldType: string;
@@ -47,6 +58,18 @@ interface FinalizedEventData {
 const FinalizedEventView: React.FC = () => {
   const { eventUUID } = useParams<{ eventUUID: string }>();
   
+  // Google Calendar hook
+  const { 
+    isAuthenticated: isGoogleAuthenticated,
+    addToGoogleCalendar,
+    authenticate: authenticateGoogle,
+    disconnect: disconnectGoogle,
+    isAuthenticating,
+    isAddingToCalendar,
+    isDisconnecting,
+    isCheckingAuth
+  } = useGoogleCalendar();
+  
   // Fetch finalized event data
   const { data, isLoading, isError, error } = useQuery<FinalizedEventData>({
     queryKey: ['finalizedEvent', eventUUID],
@@ -71,6 +94,22 @@ const FinalizedEventView: React.FC = () => {
       return dateStr;
     }
   };
+
+  // Handle Google Calendar integration
+  const handleAddToGoogleCalendar = () => {
+    if (!data) return;
+
+    const eventData = {
+      title: data.event.name,
+      description: data.event.description || 'Event created with EventPlanner',
+      startDate: data.finalizedEvent.finalizedDate,
+      location: data.finalizedEvent.finalizedPlace || undefined,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    };
+
+    addToGoogleCalendar(eventData);
+  };
+
 
   // Group fields by type for better organization
   const groupFieldsByType = (selections: Record<string, CustomFieldSelection> | undefined) => {
@@ -305,23 +344,61 @@ const FinalizedEventView: React.FC = () => {
           {/* Add to Calendar Section */}
           <Card className="bg-purple-900/40 border-purple-700/50 mt-6">
             <CardHeader>
-              <CardTitle className="text-xl text-purple-100">Add to Your Calendar</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl text-purple-100">Add to Your Calendar</CardTitle>
+                {/* Google Calendar Settings */}
+                {isGoogleAuthenticated && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="text-purple-300 hover:text-purple-100">
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="bg-purple-900 border-purple-700">
+                      <DropdownMenuLabel className="text-purple-200">Google Calendar</DropdownMenuLabel>
+                      <DropdownMenuSeparator className="bg-purple-700" />
+                      <DropdownMenuItem 
+                        onClick={disconnectGoogle}
+                        disabled={isDisconnecting}
+                        className="text-red-300 hover:text-red-200 hover:bg-red-900/30"
+                      >
+                        {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
-                <Button className="bg-purple-600 hover:bg-purple-500">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Google Calendar
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-500">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Outlook Calendar
-                </Button>
-                <Button className="bg-purple-600 hover:bg-purple-500">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Apple Calendar
-                </Button>
+                {/* Google Calendar Button */}
+<Button 
+  className="bg-purple-600 hover:bg-purple-500 relative disabled:opacity-50"
+  onClick={isGoogleAuthenticated ? handleAddToGoogleCalendar : authenticateGoogle}
+  disabled={isAddingToCalendar || isAuthenticating || isCheckingAuth}
+>
+  <Calendar className="h-4 w-4 mr-2" />
+  {isCheckingAuth ? 'Checking...' :
+   isAuthenticating ? 'Connecting...' : 
+   isAddingToCalendar ? 'Adding...' :
+   isGoogleAuthenticated ? 'Add to Google Calendar' : 'Connect Google Calendar'}
+  
+  {/* Auth status indicator */}
+  {isGoogleAuthenticated && !isCheckingAuth && (
+    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-purple-600" />
+  )}
+</Button>
               </div>
+              
+              {/* Google Calendar Status Message */}
+              {isGoogleAuthenticated && (
+                <div className="mt-3 p-2 bg-green-900/30 border border-green-700/50 rounded-md">
+                  <p className="text-green-200 text-sm flex items-center">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Google Calendar connected
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
           
