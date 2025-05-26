@@ -13,6 +13,7 @@ import userRoutes from "./routes/user.route";
 import sessionRoutes from "./routes/session.route";
 import eventRoutes from "./routes/event.route";
 import { initCronJobs } from "./config/cron";
+import googleAuthRoutes from "./routes/googleAuth.route";
 
 const app = express();
 
@@ -38,13 +39,13 @@ app.use("/auth", authRoutes);
 app.use('/user',authenticate,userRoutes)
 app.use('/sessions',authenticate,sessionRoutes)
 app.use("/event",authenticate,eventRoutes)
-
+app.use("/auth", googleAuthRoutes)
 app.use(errorHandler);
 
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
   await connectToDatabase(); 
 
-   initCronJobs();
+  //  initCronJobs();
 });
 
