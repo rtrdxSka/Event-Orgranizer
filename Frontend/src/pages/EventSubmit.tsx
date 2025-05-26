@@ -17,6 +17,7 @@ import {
   Plus,
   Check,
   ThumbsUp,
+  ExternalLink,
 } from "lucide-react";
 import Navbar from "@/components/NavBar";
 import { useForm, Controller } from "react-hook-form";
@@ -141,8 +142,6 @@ const EventSubmit = () => {
         }
       },
     });
-
-  
 
   // Populate the form with the user's previous response
   useEffect(() => {
@@ -609,49 +608,63 @@ const EventSubmit = () => {
     return `${dateFormatted} at ${timeFormatted}`;
   };
 
-  if (event && (event.status === 'closed' || event.status === 'finalized')) {
-  return (
-    <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
-      <Navbar />
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/50 to-purple-950/80" />
-      </div>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="relative w-full max-w-md px-4 pt-16 text-center">
-          <div className="p-8 bg-purple-900/40 rounded-xl border border-purple-700/50">
-            <Calendar className="h-16 w-16 text-purple-300 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-purple-100 mb-2">
-              {event.status === 'closed' ? 'Event Closed' : 'Event Finalized'}
-            </h2>
-            <p className="text-purple-200 mb-6">
-              {event.status === 'closed' 
-                ? "This event is no longer accepting responses as it has been closed by the organizer."
-                : "This event has been finalized. The details have been confirmed and no further changes can be made."}
-            </p>
-            {event.eventDate && (
-              <div className="bg-purple-800/30 p-3 rounded-lg mb-4">
-                <h3 className="font-medium text-lg text-purple-100 mb-1">Final Date</h3>
-                <p className="text-purple-200">{formatDate(event.eventDate)}</p>
-              </div>
-            )}
-            {event.place && (
-              <div className="bg-purple-800/30 p-3 rounded-lg">
-                <h3 className="font-medium text-lg text-purple-100 mb-1">Final Location</h3>
-                <p className="text-purple-200">{event.place}</p>
-              </div>
-            )}
-            <Button
-              onClick={() => navigate('/events')}
-              className="mt-6 bg-purple-200 text-purple-950 hover:bg-purple-100"
-            >
-              View My Events
-            </Button>
+  if (event && (event.status === "closed" || event.status === "finalized")) {
+    return (
+      <div className="min-h-screen bg-purple-950 flex flex-col relative overflow-hidden">
+        <Navbar />
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/50 to-purple-950/80" />
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="relative w-full max-w-md px-4 pt-16 text-center">
+            <div className="p-8 bg-purple-900/40 rounded-xl border border-purple-700/50">
+              <Calendar className="h-16 w-16 text-purple-300 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-purple-100 mb-2">
+                {event.status === "closed" ? "Event Closed" : "Event Finalized"}
+              </h2>
+              <p className="text-purple-200 mb-6">
+                {event.status === "closed"
+                  ? "This event is no longer accepting responses as it has been closed by the organizer."
+                  : "This event has been finalized. The details have been confirmed and no further changes can be made."}
+              </p>
+              {event.eventDate && (
+                <div className="bg-purple-800/30 p-3 rounded-lg mb-4">
+                  <h3 className="font-medium text-lg text-purple-100 mb-1">
+                    Final Date
+                  </h3>
+                  <p className="text-purple-200">
+                    {formatDate(event.eventDate)}
+                  </p>
+                </div>
+              )}
+              {event.place && (
+                <div className="bg-purple-800/30 p-3 rounded-lg">
+                  <h3 className="font-medium text-lg text-purple-100 mb-1">
+                    Final Location
+                  </h3>
+                  <p className="text-purple-200">{event.place}</p>
+                </div>
+              )}
+              <Button
+                onClick={() => navigate("/events")}
+                className="mt-6 bg-purple-200 text-purple-950 hover:bg-purple-100 "
+              >
+                View My Events
+              </Button>
+              <Button
+                type="button"
+                onClick={() => navigate(`/event/finalized/${eventUUID}`)}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-medium shadow-lg transition-all duration-200 flex items-center gap-2 w-full max-w-xs"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View Finalized Details
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   // Loading state
   if (isLoading) {
