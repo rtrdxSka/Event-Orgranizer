@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import Navbar from '@/components/NavBar';
-import { Loader2, XCircle, Users, List, X, MessageSquare, LayoutDashboard, CheckCircle, UserCircle, Clock, Calendar, MapPin, ListChecks, AlertCircle } from 'lucide-react';
+import { Loader2, XCircle, Users, List, X, MessageSquare, LayoutDashboard, CheckCircle, UserCircle, Clock, Calendar, MapPin, ListChecks, AlertCircle, ExternalLink } from 'lucide-react';
 import { getEventForOwner, getFinalizedEvent } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import EventVisualization from '@/components/EventEditComponents/EventVisualization';
@@ -14,6 +14,7 @@ import { validateFinalizations, checkEmptyOptionalFields } from '@/lib/validatio
 import type { FinalizeSelections as FinalizeSelectionsType } from '@/lib/validations/eventFinalize.schemas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { navigate } from '@/lib/navigation';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -570,6 +571,10 @@ const validateFinalizeSelections = () => {
     );
   };
 
+    const handleViewFinalizedEvent = () => {
+    navigate(`/event/finalized/${eventData?.event.eventUUID}`);
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -610,249 +615,6 @@ const validateFinalizeSelections = () => {
     );
   }
 
-  if (eventData.event.status === 'finalized') {
-    if (isFinalizedLoading) {
-      return (
-        <div className="min-h-screen bg-purple-950">
-          <Navbar />
-          <div className="pt-20 pb-12 px-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex-1 flex items-center justify-center">
-                <div className="relative w-full max-w-md px-4 pt-16 text-center">
-                  <Loader2 className="h-16 w-16 animate-spin text-purple-300 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-purple-100 mb-2">
-                    Loading Finalized Event Details
-                  </h2>
-                  <p className="text-purple-200">
-                    Please wait while we fetch the finalized event information...
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (isFinalizedError || !finalizedEventData) {
-      return (
-        <div className="min-h-screen bg-purple-950">
-          <Navbar />
-          <div className="pt-20 pb-12 px-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex-1 flex items-center justify-center">
-                <div className="relative w-full max-w-md px-4 pt-16 text-center">
-                  <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-purple-100 mb-2">
-                    Error Loading Finalized Event
-                  </h2>
-                  <p className="text-red-300 mb-8">
-                    Failed to load finalized event details.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Group custom fields
-    const groupedFields = groupFieldsByType(finalizedEventData.finalizedEvent.customFieldSelections);
-
-    return (
-      <div className="min-h-screen bg-purple-950">
-        <Navbar />
-        <div className="pt-20 pb-12 px-4">
-          <div className="max-w-4xl mx-auto">
-            {/* Finalized Status Banner */}
-            <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 mb-6 flex items-center gap-3">
-              <CheckCircle className="h-6 w-6 text-blue-400 flex-shrink-0" />
-              <div>
-                <h3 className="text-blue-200 font-medium">This event has been finalized</h3>
-                <p className="text-blue-300 text-sm">
-                  You have confirmed the final details for this event.
-                </p>
-              </div>
-            </div>
-
-            {/* Event Header */}
-            <Card className="bg-purple-900/40 border-purple-700/50 mb-6">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-3xl font-bold text-purple-100">
-                      {finalizedEventData.event.name}
-                    </CardTitle>
-                    <CardDescription className="text-purple-200 mt-2 text-base">
-                      {eventData.event.description}
-                    </CardDescription>
-                  </div>
-                  <Badge className="bg-blue-600/30 text-blue-200">Finalized</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 text-sm text-purple-300 mb-3">
-                  <UserCircle className="h-4 w-4" />
-                  <span>Organized by: {finalizedEventData.organizer.email}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-purple-300">
-                  <Clock className="h-4 w-4" />
-                  <span>Finalized on: {formatDate(finalizedEventData.finalizedEvent.finalizedAt)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Main Content Grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Date and Place */}
-              <Card className="bg-purple-900/40 border-purple-700/50">
-                <CardHeader>
-                  <CardTitle className="text-xl text-purple-100 flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-purple-300" />
-                    Confirmed Date & Time
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-purple-800/40 p-4 rounded-md border border-purple-700/50">
-                    <p className="text-purple-100 text-lg font-medium">
-                      {formatDate(finalizedEventData.finalizedEvent.finalizedDate)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-purple-900/40 border-purple-700/50">
-                <CardHeader>
-                  <CardTitle className="text-xl text-purple-100 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-purple-300" />
-                    Confirmed Location
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-purple-800/40 p-4 rounded-md border border-purple-700/50">
-                    <p className="text-purple-100 text-lg font-medium">
-                      {finalizedEventData.finalizedEvent.finalizedPlace || 'No location specified'}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Custom Fields */}
-            {Object.entries(groupedFields).map(([fieldType, selections]) => {
-              if (selections.length === 0) return null;
-              
-              return (
-                <Card key={fieldType} className="bg-purple-900/40 border-purple-700/50 mt-6">
-                  <CardHeader>
-                    <CardTitle className="text-xl text-purple-100 flex items-center gap-2">
-                      <ListChecks className="h-5 w-5 text-purple-300" />
-                      {fieldType === 'text' ? 'Text Responses' : 
-                       fieldType === 'radio' ? 'Selected Options' :
-                       fieldType === 'checkbox' ? 'Selected Options' : 'List Entries'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {selections.map((selection, idx) => (
-                        <div key={idx} className="bg-purple-800/30 p-4 rounded-lg border border-purple-700/50">
-                          <h3 className="text-lg font-medium text-purple-100 mb-3">{selection.fieldTitle}</h3>
-                          
-                          {/* Text field */}
-                          {selection.fieldType === 'text' && (
-                            <p className="text-purple-200">{selection.selection}</p>
-                          )}
-                          
-                          {/* Radio field (single selection) */}
-                          {selection.fieldType === 'radio' && (
-                            <div className="flex items-center gap-2 bg-purple-700/40 p-3 rounded">
-                              <CheckCircle className="h-5 w-5 text-green-400" />
-                              <span className="text-purple-100">{selection.selection}</span>
-                            </div>
-                          )}
-                          
-                          {/* Checkbox field (multiple selections) */}
-                          {selection.fieldType === 'checkbox' && (
-                            <div className="grid gap-2">
-                              {Array.isArray(selection.selection) ? (
-                                selection.selection.map((option, optIdx) => (
-                                  <div key={optIdx} className="flex items-center gap-2 bg-purple-700/40 p-3 rounded">
-                                    <CheckCircle className="h-5 w-5 text-green-400" />
-                                    <span className="text-purple-100">{option}</span>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="flex items-center gap-2 bg-purple-700/40 p-3 rounded">
-                                  <CheckCircle className="h-5 w-5 text-green-400" />
-                                  <span className="text-purple-100">{selection.selection}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* List field */}
-                          {selection.fieldType === 'list' && (
-                            <div className="space-y-2">
-                              {Array.isArray(selection.selection) ? (
-                                selection.selection.map((item, itemIdx) => (
-                                  <div key={itemIdx} className="bg-purple-700/40 p-3 rounded">
-                                    <p className="text-purple-100">{item}</p>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="bg-purple-700/40 p-3 rounded">
-                                  <p className="text-purple-100">{selection.selection}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            
-            {/* Add to Calendar Section */}
-            <Card className="bg-purple-900/40 border-purple-700/50 mt-6">
-              <CardHeader>
-                <CardTitle className="text-xl text-purple-100">Add to Your Calendar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  <Button className="bg-purple-600 hover:bg-purple-500">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Google Calendar
-                  </Button>
-                  <Button className="bg-blue-600 hover:bg-blue-500">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Outlook Calendar
-                  </Button>
-                  <Button className="bg-purple-600 hover:bg-purple-500">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Apple Calendar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* Contact Info Section */}
-            <div className="bg-purple-800/30 rounded-lg p-4 mt-6 flex items-start gap-3 border border-purple-700/50">
-              <AlertCircle className="h-5 w-5 text-purple-300 mt-0.5" />
-              <div>
-                <p className="text-purple-200">
-                  This event has been finalized. If you need to make changes, please contact the organizer at{" "}
-                  <span className="text-purple-100">{finalizedEventData.organizer.email}</span>.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
 
   // No responses yet
@@ -992,20 +754,46 @@ const validateFinalizeSelections = () => {
                     <h2 className="text-2xl font-semibold text-purple-100">
                       Event Dashboard
                     </h2>
-                    <p className="text-purple-300 text-sm mt-1">
-                      Overview of all voting categories and responses. Select options to finalize the event.
+                     <p className="text-purple-300 text-sm mt-1">
+                      {eventData.event.status === 'finalized' 
+                        ? "This event has been finalized. View the final details below."
+                        : "Overview of all voting categories and responses. Select options to finalize the event."
+                      }
                     </p>
                   </div>
                   <div className="p-6">
-                    <EventVisualization 
-                      eventData={{
-                        event: eventData.event,
-                        chartsData: eventData.chartsData,
-                        listFieldsData: eventData.listFieldsData,
-                        textFieldsData: eventData.textFieldsData
-                      }}
-                      onSelectionChange={handleSelectionChange}
-                    />
+                    {eventData.event.status === 'finalized' ? (
+                      // Show finalized message and button
+                      <div className="text-center py-12">
+                        <div className="max-w-md mx-auto">
+                          <CheckCircle className="h-16 w-16 text-blue-400 mx-auto mb-6" />
+                          <h3 className="text-2xl font-bold text-purple-100 mb-4">
+                            Event Finalized!
+                          </h3>
+                          <p className="text-purple-200 mb-8 leading-relaxed">
+                            You have successfully finalized this event. The final date, location, and all selections have been confirmed and participants have been notified.
+                          </p>
+                          <Button 
+                            onClick={handleViewFinalizedEvent}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-3 rounded-lg"
+                          >
+                            <ExternalLink className="h-5 w-5 mr-2" />
+                            View Finalized Event Details
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Show normal dashboard
+                      <EventVisualization 
+                        eventData={{
+                          event: eventData.event,
+                          chartsData: eventData.chartsData,
+                          listFieldsData: eventData.listFieldsData,
+                          textFieldsData: eventData.textFieldsData
+                        }}
+                        onSelectionChange={handleSelectionChange}
+                      />
+                    )}
                   </div>
                 </div>
               ) : activeTab === 'voting' ? (
