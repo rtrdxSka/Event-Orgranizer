@@ -353,7 +353,7 @@ export const createOrUpdateEventResponse = async (
     
     // Add new votes
     data.selectedPlaces.forEach(place => {
-      const option = placeCategory!.options.find(opt => opt.optionName === place);
+      const option = placeCategory!.options.find(opt => opt.optionName.toLowerCase() === place.toLowerCase());
       if (option) {
         option.votes.push(userObjectId);
       }
@@ -363,7 +363,7 @@ export const createOrUpdateEventResponse = async (
     if (Array.isArray(data.suggestedPlaces) && data.suggestedPlaces.length > 0 && event.eventPlaces.allowUserAdd) {
       for (const place of data.suggestedPlaces) {
         // Add to event category if it doesn't exist
-        const exists = placeCategory.options.some(opt => opt.optionName === place);
+        const exists = placeCategory.options.some(opt => opt.optionName.toLowerCase() === place.toLowerCase());
         if (!exists) {
           placeCategory.options.push({
             optionName: place,
@@ -399,7 +399,7 @@ export const createOrUpdateEventResponse = async (
     
     // Find matching category in the event
     let eventCategory = event.votingCategories.find(
-      cat => cat.categoryName === responseCategory.categoryName
+      cat => cat.categoryName.toLowerCase() === responseCategory.categoryName.toLowerCase()
     );
 
     if (!eventCategory) {
