@@ -120,7 +120,13 @@ export const initialFormData: EventFormData = {
     allowUserAdd: true,
     maxVotes: 1
   },
-   closesBy: ""
+    closesBy: (() => {
+    // Set default to 7 days from now
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    defaultDate.setHours(23, 59, 0, 0); // Set to end of day
+    return defaultDate.toISOString().slice(0, 16); // Format for datetime-local input
+  })()
 };
 
 // Define a type for the event creation payload

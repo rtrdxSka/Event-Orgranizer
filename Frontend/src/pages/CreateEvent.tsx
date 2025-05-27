@@ -257,7 +257,7 @@ const CreateEventForm = () => {
           maxVotes: formData.place.maxVotes,
         },
         formFields: formFields,
-        closesBy: formData.closesBy || null,
+        closesBy: formData.closesBy
       };
 
       // First validate the structure with Zod
@@ -414,7 +414,7 @@ const CreateEventForm = () => {
           maxVotes: formData.place.maxVotes,
         },
         votingCategories,
-        closesBy: formData.closesBy ? new Date(formData.closesBy).toISOString() : null,
+        closesBy: new Date(formData.closesBy).toISOString(),
       };
 
       // Submit the form

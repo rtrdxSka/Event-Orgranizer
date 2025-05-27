@@ -286,9 +286,9 @@ export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | tru
 };
 
 export const validateClosesBy = (closesBy: string | null): string | true => {
-  // If not provided, it's valid (will default to null in the database)
+  // Now require a closing date to be provided
   if (!closesBy || closesBy.trim() === '') {
-    return true;
+    return "Event closing date is required";
   }
   
   // Parse the date and check if it's valid
@@ -315,7 +315,7 @@ export const eventFormSchema = z.object({
   eventDates: eventDatesSchema,
   place: eventPlaceSchema,
   formFields: z.array(fieldSchema),
-  closesBy: z.string().nullable().optional(),
+  closesBy: z.string().min(1, "Event closing date is required"),
 });
 
 export type EventFormSchema = z.infer<typeof eventFormSchema>;
@@ -346,11 +346,9 @@ export const validateUniqueFieldTitles = (formFields: FieldSchema[]): string | t
 export const validateForm = (data: EventFormSchema): string | true => {
 
 
-    if ('closesBy' in data) {
-    const closesByValidation = validateClosesBy(data.closesBy);
-    if (closesByValidation !== true) {
-      return `Closing Date: ${closesByValidation}`;
-    }
+const closesByValidation = validateClosesBy(data.closesBy);
+  if (closesByValidation !== true) {
+    return `Closing Date: ${closesByValidation}`;
   }
   // First validate that all field titles are unique
   if (data.formFields.length > 0) {
