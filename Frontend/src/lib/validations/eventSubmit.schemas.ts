@@ -175,24 +175,21 @@ export const validateEventSubmit = (data: EventSubmitFormData): true | string =>
     }
     
     // Radio field validation
-    else if (fieldDefinition.type === 'radio') {
-      if (fieldDefinition.required && (!fieldValue || fieldValue === '')) {
-        return `Field "${fieldDefinition.title}" requires a selection`;
-      }
-      
-      // Validate the selected option exists in the original options
-      if (fieldValue) {
-        const validOptions = [
-          ...(fieldDefinition.options?.map(o => o.label) || [])
-        ];
+else if (fieldDefinition.type === 'radio') {
+      // Check if field is required
+      if (fieldDefinition.required) {
+        // Handle both object format {value: "", userAddedOptions: []} and simple string format
+        let selectedValue;
         
-        // Check if this is a user-added option (handled separately)
-        const isUserAddedOption = Array.isArray(fieldValue) ? 
-          fieldValue.some(val => !validOptions.includes(val)) :
-          !validOptions.includes(fieldValue as string);
-          
-        if (isUserAddedOption && !fieldDefinition.allowUserAddOptions) {
-          return `Selected option for "${fieldDefinition.title}" is not valid`;
+        if (typeof fieldValue === 'object' && fieldValue !== null) {
+          selectedValue = fieldValue.value;
+        } else {
+          selectedValue = fieldValue;
+        }
+        
+        // Check if no value is selected
+        if (!selectedValue || selectedValue === '' || selectedValue === null || selectedValue === undefined) {
+          return `Field "${fieldDefinition.title}" is required`;
         }
       }
     }
@@ -215,9 +212,9 @@ export const validateEventSubmit = (data: EventSubmitFormData): true | string =>
             o => o.id.toString() === optionId
           );
           
-          // if (!optionExists && !fieldDefinition.allowUserAddOptions) {
-          //   return `Selected invalid option for "${fieldDefinition.title}"`;
-          // }
+          if (!optionExists && !fieldDefinition.allowUserAddOptions) {
+            return `Selected invalid option for "${fieldDefinition.title}"`;
+          }
         }
       }
     }
