@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import GoogleCalendarTest from './GoogleCalendarTest';
+import { toast } from 'sonner';
 
 // Define types for finalized event data (same as before)
 interface CustomFieldSelection {
@@ -96,19 +97,29 @@ const FinalizedEventView: React.FC = () => {
   };
 
   // Handle Google Calendar integration
-  const handleAddToGoogleCalendar = () => {
-    if (!data) return;
+const handleAddToGoogleCalendar = () => {
+  console.log('Button clicked!'); // Add this first
+  console.log('Data:', data); // Check if data exists
+  console.log('Auth status:', isGoogleAuthenticated); // Check auth status
+  
+  if (!data || !data.finalizedEvent.finalizedDate) {
+    console.log('No data or date available'); // Debug this condition
+    toast.error('No confirmed date available for this event');
+    return;
+  }
 
-    const eventData = {
-      title: data.event.name,
-      description: data.event.description || 'Event created with EventPlanner',
-      startDate: data.finalizedEvent.finalizedDate,
-      location: data.finalizedEvent.finalizedPlace || undefined,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-
-    addToGoogleCalendar(eventData);
+  const eventData = {
+    title: data.event.name,
+    description: data.event.description || 'Event created with EventPlanner',
+    startDate: data.finalizedEvent.finalizedDate,
+    location: data.finalizedEvent.finalizedPlace || undefined,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
   };
+
+  console.log('About to call addToGoogleCalendar with:', eventData);
+  addToGoogleCalendar(eventData);
+  console.log('Called addToGoogleCalendar');
+};
 
 
   // Group fields by type for better organization
@@ -374,7 +385,16 @@ const FinalizedEventView: React.FC = () => {
                 {/* Google Calendar Button */}
 <Button 
   className="bg-purple-600 hover:bg-purple-500 relative disabled:opacity-50"
-  onClick={isGoogleAuthenticated ? handleAddToGoogleCalendar : authenticateGoogle}
+  onClick={() => {
+    console.log('Raw button click detected');
+    if (isGoogleAuthenticated) {
+      console.log('User is authenticated, calling handleAddToGoogleCalendar');
+      handleAddToGoogleCalendar();
+    } else {
+      console.log('User not authenticated, calling authenticateGoogle');
+      authenticateGoogle();
+    }
+  }}
   disabled={isAddingToCalendar || isAuthenticating || isCheckingAuth}
 >
   <Calendar className="h-4 w-4 mr-2" />
