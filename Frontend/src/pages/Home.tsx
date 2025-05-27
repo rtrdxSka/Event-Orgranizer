@@ -265,30 +265,30 @@ const Home = () => {
           
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12">
             {[
-              { 
-                icon: Calendar, 
-                title: "Smart Date Voting",
-                desc: "Our AI-powered system suggests optimal dates based on everyone's preferences and past scheduling patterns",
-                features: ["Conflict detection", "Calendar integration", "Timezone support"]
-              },
-              { 
-                icon: MapPin, 
-                title: "Location Magic",
-                desc: "Find the perfect venue with integrated maps, ratings, and distance calculations for all attendees",
-                features: ["Distance optimization", "Weather forecasts", "Venue recommendations"]
-              },
-              { 
-                icon: MessageSquare, 
-                title: "Enhanced Communication",
-                desc: "Keep everyone in the loop with our smart notification system and group chat features",
-                features: ["Real-time updates", "File sharing", "Poll creation"]
-              },
-              { 
-                icon: Users, 
-                title: "Advanced RSVP",
-                desc: "Track attendance, dietary preferences, and plus-ones with our comprehensive RSVP system",
-                features: ["Dietary management", "Guest list analytics", "Automated reminders"]
-              }
+             { 
+    icon: Calendar, 
+    title: "Date & Time Voting",
+    desc: "Let participants vote on multiple date and time options. Set voting limits and allow attendees to suggest new dates if needed",
+    features: ["Multiple date options", "Time preference voting", "Suggest new dates", "Vote limits per person"]
+  },
+  { 
+    icon: MapPin, 
+    title: "Location Selection", 
+    desc: "Collect votes for event locations with the ability to suggest new venues. Perfect for finding the most convenient spot for everyone",
+    features: ["Location voting", "Venue suggestions"]
+  },
+  { 
+    icon: MessageSquare, 
+    title: "Custom Response Forms",
+    desc: "Create tailored forms with text fields, multiple choice, checkboxes, and lists to gather exactly the information you need",
+    features: ["Text responses", "Multiple choice questions", "Checkbox selections", "Custom lists"]
+  },
+  { 
+    icon: Users, 
+    title: "Response Management",
+    desc: "Track all responses in real-time with detailed analytics. See who voted for what and manage participant preferences easily",
+    features: ["Real-time tracking", "Response analytics",]
+  }
             ].map((feature, idx) => (
               <div 
                 key={idx}
@@ -345,42 +345,42 @@ const Home = () => {
 
             <div className="grid md:grid-cols-3 gap-16 relative z-10">
               {[
-                {
-                  number: 1,
-                  title: "Create & Invite",
-                  desc: "Set up your event in minutes",
-                  icon: Calendar,
-                  details: [
-                    "Choose event type & name",
-                    "Set potential dates & times",
-                    "Import contacts to invite",
-                    "Customize invitation message"
-                  ]
-                },
-                {
-                  number: 2,
-                  title: "Coordinate & Plan",
-                  desc: "Make decisions together",
-                  icon: Clock,
-                  details: [
-                    "Vote on dates & locations",
-                    "Share preferences & constraints",
-                    "Discuss in group chat",
-                    "Track responses in real-time"
-                  ]
-                },
-                {
-                  number: 3,
-                  title: "Finalize & Remind",
-                  desc: "Lock in the perfect plan",
-                  icon: Bell,
-                  details: [
-                    "Confirm final details",
-                    "Send automated reminders",
-                    "Share event updates",
-                    "Manage last-minute changes"
-                  ]
-                }
+                 {
+    number: 1,
+    title: "Create & Configure",
+    desc: "Set up your event with custom fields",
+    icon: Calendar,
+    details: [
+      "Add event name & description",
+      "Set multiple date/time options", 
+      "Add location choices",
+      "Create custom response fields"
+    ]
+  },
+  {
+    number: 2,
+    title: "Share & Collect",
+    desc: "Gather responses from participants",
+    icon: Clock,
+    details: [
+      "Share unique event link",
+      "Participants vote on preferences",
+      "Collect custom field responses",
+      "Allow new suggestions if enabled"
+    ]
+  },
+  {
+    number: 3,
+    title: "Analyze & Finalize",
+    desc: "Review results and confirm details",
+    icon: Bell,
+    details: [
+      "View voting results & analytics",
+      "See all participant responses",
+      "Select final date & location",
+      "Add to Google Calendar integration"
+    ]
+  }
               ].map((step, idx) => (
                 <div 
                   key={idx} 
