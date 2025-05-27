@@ -25,6 +25,14 @@ export const useGoogleCalendar = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
+    useEffect(() => {
+    isMountedRef.current = true; // Ensure it's set to true when component mounts
+    
+    return () => {
+      isMountedRef.current = false; // Only set to false on unmount
+    };
+  }, []);
+
   // Check authentication status
   const { 
     data: authStatus, 
@@ -163,62 +171,61 @@ export const useGoogleCalendar = () => {
   });
 
   // Create calendar event
-  const { mutate: addToCalendar, isPending: isAddingToCalendar } = useMutation({
-    mutationFn: async (eventData: EventData) => {
-      // Check if authenticated
-      if (!authStatus?.isAuthenticated) {
-        throw new Error('Not authenticated with Google Calendar');
-      }
-
-      const { start, end } = formatEventDateTime(
-        eventData.startDate, 
-        eventData.endDate ? 
-          (new Date(eventData.endDate).getTime() - new Date(eventData.startDate).getTime()) / (1000 * 60 * 60) : 
-          2 // Default 2 hours
-      );
-
-      return createGoogleCalendarEvent({
-        summary: eventData.title,
-        description: eventData.description,
-        start: eventData.endDate ? eventData.startDate : start,
-        end: eventData.endDate || end,
-        location: eventData.location,
-        timeZone: eventData.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
-    },
-    onSuccess: (data) => {
-      if (!isMountedRef.current) return;
-      
-      toast.success('Event added to Google Calendar!');
-      
-      // Optional: Open Google Calendar to show the event
-      if (data?.event?.htmlLink) {
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            const openCalendar = window.confirm('Event added! Would you like to view it in Google Calendar?');
-            if (openCalendar) {
-              window.open(data.event.htmlLink, '_blank');
-            }
-          }
-        }, 500);
-      }
-    },
-    onError: (error: any) => {
-      if (!isMountedRef.current) return;
-      
-      console.error('Calendar event creation error:', error);
-      
-      if (error.message?.includes('Not authenticated')) {
-        toast.error('Please connect your Google Calendar first');
-      } else if (error.message?.includes('401') || error.status === 401) {
-        toast.error('Google Calendar access expired. Please reconnect.');
-        // Automatically try to refresh auth status
-        safeRefetchAuthStatus();
-      } else {
-        toast.error('Failed to add event to calendar: ' + (error.message || 'Unknown error'));
-      }
+ const { mutate: addToCalendar, isPending: isAddingToCalendar } = useMutation({
+  mutationFn: async (eventData: EventData) => {
+    console.log('addToCalendar mutationFn called with:', eventData);
+    
+    // Check if authenticated
+    if (!authStatus?.isAuthenticated) {
+      console.log('Not authenticated in mutationFn');
+      throw new Error('Not authenticated with Google Calendar');
     }
-  });
+
+    console.log('Creating calendar event data...');
+    const calendarEventData = {
+      summary: eventData.title,
+      description: eventData.description,
+      start: eventData.startDate,
+      end: eventData.endDate,
+      location: eventData.location,
+      timeZone: eventData.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    };
+
+    console.log('Calling createGoogleCalendarEvent with:', calendarEventData);
+    return createGoogleCalendarEvent(calendarEventData);
+  },
+  onSuccess: (data) => {
+    console.log('Calendar event created successfully:', data);
+    if (!isMountedRef.current) return;
+    
+    toast.success('Event added to Google Calendar!');
+    
+    // Optional: Open Google Calendar to show the event
+    if (data?.event?.htmlLink) {
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          const openCalendar = window.confirm('Event added! Would you like to view it in Google Calendar?');
+          if (openCalendar) {
+            window.open(data.event.htmlLink, '_blank');
+          }
+        }
+      }, 500);
+    }
+  },
+  onError: (error: any) => {
+    console.error('Calendar event creation failed:', error);
+    if (!isMountedRef.current) return;
+    
+    if (error.message?.includes('Not authenticated')) {
+      toast.error('Please connect your Google Calendar first');
+    } else if (error.message?.includes('401') || error.status === 401) {
+      toast.error('Google Calendar access expired. Please reconnect.');
+      safeRefetchAuthStatus();
+    } else {
+      toast.error('Failed to add event to calendar: ' + (error.message || 'Unknown error'));
+    }
+  }
+});
 
   // Revoke access
   const { mutate: disconnect, isPending: isDisconnecting } = useMutation({
@@ -238,24 +245,33 @@ export const useGoogleCalendar = () => {
 
   // Main function to add event to calendar
   const handleAddToGoogleCalendar = useCallback(async (eventData: EventData) => {
-    if (!isMountedRef.current) return;
-    
-    try {
-      if (!authStatus?.isAuthenticated) {
-        // Store event data for after authentication
-        sessionStorage.setItem('pendingCalendarEvent', JSON.stringify(eventData));
-        authenticate();
-        return;
-      }
-
-      addToCalendar(eventData);
-    } catch (error) {
-      console.error('Error in handleAddToGoogleCalendar:', error);
-      if (isMountedRef.current) {
-        toast.error('Failed to process calendar request');
-      }
+  console.log('handleAddToGoogleCalendar called with:', eventData);
+  console.log('isMountedRef.current:', isMountedRef.current);
+  
+  if (!isMountedRef.current) {
+    console.log('Component not mounted, returning');
+    return;
+  }
+  
+  try {
+    console.log('Auth status in handler:', authStatus?.isAuthenticated);
+    if (!authStatus?.isAuthenticated) {
+      console.log('Not authenticated, storing event and calling authenticate');
+      // Store event data for after authentication
+      sessionStorage.setItem('pendingCalendarEvent', JSON.stringify(eventData));
+      authenticate();
+      return;
     }
-  }, [authStatus?.isAuthenticated, authenticate, addToCalendar]);
+
+    console.log('Authenticated, calling addToCalendar');
+    addToCalendar(eventData);
+  } catch (error) {
+    console.error('Error in handleAddToGoogleCalendar:', error);
+    if (isMountedRef.current) {
+      toast.error('Failed to process calendar request');
+    }
+  }
+}, [authStatus?.isAuthenticated, authenticate, addToCalendar]);
 
   // Check for pending event after authentication
   useEffect(() => {
