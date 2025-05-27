@@ -1621,12 +1621,11 @@ export const removeEventOption = async (
     }
   }
   
-  // Different handling paths based on field type
-  let isCustomField = false;
+  // Track affected users from voting categories
+  let affectedUserIds: string[] = [];
   
-  // 1. First, try to update customFields if we have a fieldId
+  // 1. Handle custom fields (radio, checkbox, list)
   if (effectiveFieldId && event.customFields && event.customFields.has(effectiveFieldId)) {
-    isCustomField = true;
     const customField = event.customFields.get(effectiveFieldId);
     
     // Check if this is a field with options (radio, checkbox)
@@ -1684,9 +1683,8 @@ export const removeEventOption = async (
     }
   }
   
-  // 2. Then, handle date/place categories regardless of custom field processing
+  // 2. Handle built-in date/place categories
   if (categoryName.toLowerCase() === 'date' && event.eventDates && event.eventDates.dates) {
-    isCustomField = false; // This is a built-in category
     // Remove from the dates array if it exists there
     const dateIndex = event.eventDates.dates.findIndex(
       (date) => date.toLowerCase() === optionName.toLowerCase()
@@ -1708,7 +1706,6 @@ export const removeEventOption = async (
       event.markModified('eventDates');
     }
   } else if (categoryName.toLowerCase() === 'place' && event.eventPlaces && event.eventPlaces.places) {
-    isCustomField = false; // This is a built-in category
     // Remove from the places array if it exists there
     const placeIndex = event.eventPlaces.places.findIndex(
       (place) => place.toLowerCase() === optionName.toLowerCase()
@@ -1731,40 +1728,39 @@ export const removeEventOption = async (
     }
   }
   
-  // 3. Finally, handle voting categories if not already handled as a custom field
-  let affectedUserIds: string[] = [];
-  if (!isCustomField) {
-    // Find the category
-    const categoryIndex = event.votingCategories.findIndex(
-      cat => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+  // 3. ALWAYS handle voting categories (for ALL field types including custom radio/checkbox)
+  // Find the voting category
+  const categoryIndex = event.votingCategories.findIndex(
+    cat => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+  );
+  
+  if (categoryIndex !== -1) {
+    const category = event.votingCategories[categoryIndex];
+    
+    // Find the option
+    const optionIndex = category.options.findIndex(
+      opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
     );
     
-    if (categoryIndex !== -1) {
-      const category = event.votingCategories[categoryIndex];
+    if (optionIndex !== -1) {
+      console.log(`Removing option "${optionName}" from voting category "${categoryName}"`);
       
-      // Find the option
-      const optionIndex = category.options.findIndex(
-        opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+      // Ensure there will be at least one option left
+      appAssert(
+        category.options.length > 1,
+        BAD_REQUEST,
+        `Cannot remove the only option in category '${categoryName}'`
       );
       
-      if (optionIndex !== -1) {
-        // Ensure there will be at least one option left
-        appAssert(
-          category.options.length > 1,
-          BAD_REQUEST,
-          `Cannot remove the only option in category '${categoryName}'`
-        );
-        
-        // Get the option to be removed (for tracking affected users)
-        const removedOption = category.options[optionIndex];
-        affectedUserIds = removedOption.votes.map(userId => userId.toString());
-        
-        // Remove the option from the category
-        category.options.splice(optionIndex, 1);
-        
-        // Explicitly mark the votingCategories as modified
-        event.markModified('votingCategories');
-      }
+      // Get the option to be removed (for tracking affected users)
+      const removedOption = category.options[optionIndex];
+      affectedUserIds = removedOption.votes.map(userId => userId.toString());
+      
+      // Remove the option from the category
+      category.options.splice(optionIndex, 1);
+      
+      // Explicitly mark the votingCategories as modified
+      event.markModified('votingCategories');
     }
   }
   
