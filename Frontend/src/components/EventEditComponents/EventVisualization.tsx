@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { removeEventOption } from "@/lib/api";
 import ConfirmDialog from './ConfirmDialog';
+import queryClient from '@/config/queryClient';
 
 // Define types for our component
 interface Voter {
@@ -157,6 +158,40 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({ eventData, onSe
       return dateStr;
     }
   };
+
+  const clearDeletedOptionFromSelections = (deletedOptionName: string, categoryName: string) => {
+  // Clear from selectedOptions if the deleted option was selected
+  const updatedSelections = { ...selectedOptions };
+  
+  // Check all selection keys for this category and clear if they match the deleted option
+  Object.keys(updatedSelections).forEach(key => {
+    if (key.startsWith(`category-${categoryName}-`) && updatedSelections[key] === deletedOptionName) {
+      delete updatedSelections[key];
+    }
+  });
+  
+  setSelectedOptions(updatedSelections);
+  
+  // Also clear from list selections if it's a list field
+  const updatedListSelections = { ...selectedListItems };
+  Object.keys(updatedListSelections).forEach(fieldId => {
+    if (updatedListSelections[fieldId].includes(deletedOptionName)) {
+      updatedListSelections[fieldId] = updatedListSelections[fieldId].filter(
+        item => item !== deletedOptionName
+      );
+    }
+  });
+  setSelectedListItems(updatedListSelections);
+  
+  // Notify parent of selection changes
+  if (onSelectionChange) {
+    onSelectionChange({
+      categorySelections: updatedSelections,
+      listSelections: updatedListSelections,
+      textSelections: selectedTextResponses
+    });
+  }
+};
 
   // Get active category data
   const getActiveCategoryData = (tabId: string): Category | null => {
@@ -420,6 +455,10 @@ const handleDeleteOption = async () => {
     
     // Show success message
     toast.success(`Option "${optionName}" removed successfully`);
+
+    queryClient.invalidateQueries({ queryKey: ['eventEdit', eventData.event._id] });
+
+    clearDeletedOptionFromSelections(optionName, categoryName);
     
     // Refresh the page to reflect the changes
     // window.location.reload();
@@ -524,7 +563,7 @@ const openDeleteConfirm = (categoryName: string, optionName: string, fieldId?: s
                       {optionGroup.length > 0 ? (
                         <>
                           <Select
-                            value={selectedOptions[`category-${category.categoryName}-${groupIndex}`]}
+                            value={selectedOptions[`category-${category.categoryName}-${groupIndex}`] || ""}
                             onValueChange={(value) => handleSelectChange(groupIndex, value)}
                           >
                             <SelectTrigger className="bg-purple-800/50 border-purple-600 text-purple-100">
