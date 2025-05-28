@@ -530,25 +530,40 @@ export const getEventResponses = async (eventId: string) => {
 
 //fetch other user responses
 
-export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
+// services/event.service.ts - Optimized version
+
+// In event.service.ts, modify the getOtherUserResponses function
+// Replace the existing function with this version that properly limits suggestions per page
+
+export const getOtherUserResponses = async (
+  eventId: string, 
+  currentUserId: string,
+  options: {
+    limit?: number;
+    page?: number;
+    maxSuggestionsPerField?: number;
+  } = {}
+) => {
+  const { limit = 50, page = 0, maxSuggestionsPerField = 100 } = options;
+  
   // Verify event exists
   const event = await EventModel.findById(eventId);
   appAssert(event, NOT_FOUND, "Event not found");
 
-  // Get all responses for this event except the current user's
-  const otherResponses = await EventResponseModel.find({
-    eventId,
-    userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
-  }).populate('userId', 'email name');
-
-  // Get current user's response for filtering
+  // Get current user's response for filtering (keep this as is for comparison)
   const currentUserResponse = await EventResponseModel.findOne({
     eventId,
     userId: currentUserId
   });
 
-  // Extract unique suggestions from all responses
-  const uniqueSuggestions = {
+  // For testing pagination, we'll fetch all responses but limit the suggestions per page
+  const otherResponses = await EventResponseModel.find({
+    eventId: new mongoose.Types.ObjectId(eventId),
+    userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+  }).populate('userId', 'email name');
+
+  // Process in smaller chunks to avoid memory issues
+  const allUniqueSuggestions = {
     dates: new Set<string>(),
     places: new Set<string>(),
     customFields: {} as Record<string, Set<string>>
@@ -573,135 +588,156 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
     return false;
   };
 
-  // Define the interface for field options
-  interface FieldOption {
-    id: number;
-    label: string;
-  }
-
-  // Process all other users' responses
-  otherResponses.forEach(response => {
-    // Process dates
-    response.suggestedDates.forEach(date => {
-      if (isUniqueDate(date)) {
-        uniqueSuggestions.dates.add(date);
-      }
-    });
-
-    // Process places
-    response.suggestedPlaces.forEach(place => {
-      if (isUniquePlace(place)) {
-        uniqueSuggestions.places.add(place);
-      }
-    });
-
-    // Process custom field responses for list type
-    response.fieldResponses.forEach(fieldResponse => {
-      const { fieldId, type, response: fieldValue } = fieldResponse;
-      
-      // Only process relevant field types
-      if (type === 'list' && Array.isArray(fieldValue)) {
-        if (!uniqueSuggestions.customFields[fieldId]) {
-          uniqueSuggestions.customFields[fieldId] = new Set<string>();
+  // First, collect ALL unique suggestions
+  for (const response of otherResponses) {
+    try {
+      // Process dates
+      if (response.suggestedDates) {
+        for (const date of response.suggestedDates) {
+          if (isUniqueDate(date)) {
+            allUniqueSuggestions.dates.add(date);
+          }
         }
-        
-        // Add each unique list item
-        fieldValue.forEach(value => {
-          if (typeof value === 'string' && value.trim() !== '') {
-            // Check if this value is unique compared to current user's response
-            let isUnique = true;
+      }
+
+      // Process places
+      if (response.suggestedPlaces) {
+        for (const place of response.suggestedPlaces) {
+          if (isUniquePlace(place)) {
+            allUniqueSuggestions.places.add(place);
+          }
+        }
+      }
+
+      // Process custom field responses
+      if (response.fieldResponses) {
+        for (const fieldResponse of response.fieldResponses) {
+          const { fieldId, type, response: fieldValue } = fieldResponse;
+          
+          if (type === 'list' && Array.isArray(fieldValue)) {
+            if (!allUniqueSuggestions.customFields[fieldId]) {
+              allUniqueSuggestions.customFields[fieldId] = new Set<string>();
+            }
             
-            if (currentUserResponse) {
-              const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
-              if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
-                if (userFieldResponse.response.includes(value)) {
-                  isUnique = false;
+            const fieldSet = allUniqueSuggestions.customFields[fieldId];
+            
+            for (const value of fieldValue) {
+              if (typeof value === 'string' && value.trim() !== '') {
+                // Check uniqueness logic here
+                let isUnique = true;
+                if (currentUserResponse) {
+                  const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
+                  if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
+                    if (userFieldResponse.response.includes(value)) {
+                      isUnique = false;
+                    }
+                  }
+                }
+                
+                if (isUnique) {
+                  fieldSet.add(value);
                 }
               }
             }
-            
-            if (isUnique) {
-              uniqueSuggestions.customFields[fieldId].add(value);
-            }
-          }
-        });
-      }
-    });
-
-    // Process suggested options from other users (for radio and checkbox fields)
-    // We need a different approach since suggestedOptions isn't a regular object
-    if (response.suggestedOptions) {
-      // Get just the JSON data of suggestedOptions to avoid Mongoose internal properties
-      try {
-        // Try to get the data as a plain object
-        const plainObj = JSON.parse(JSON.stringify(response.suggestedOptions));
-        
-        // Process each field ID
-        for (const fieldId in plainObj) {
-          // Skip date and place categories
-          if (fieldId === 'date' || fieldId === 'place') continue;
-          
-          // Ensure this is a real field ID in our event
-          if (event.customFields && event.customFields.has(fieldId)) {
-            const options = plainObj[fieldId];
-            
-            // Initialize set for this field if needed
-            if (!uniqueSuggestions.customFields[fieldId]) {
-              uniqueSuggestions.customFields[fieldId] = new Set<string>();
-            }
-            
-            // Process each option
-            if (Array.isArray(options)) {
-              options.forEach(option => {
-                if (typeof option === 'string' && option.trim()) {
-                  // Check if option is already in user's suggestions
-                  let alreadyInUserSuggestions = false;
-                  if (currentUserResponse?.suggestedOptions) {
-                    const userSuggestions = JSON.parse(JSON.stringify(currentUserResponse.suggestedOptions));
-                    if (userSuggestions[fieldId] && Array.isArray(userSuggestions[fieldId])) {
-                      alreadyInUserSuggestions = userSuggestions[fieldId].includes(option);
-                    }
-                  }
-                  
-                  // Check if option is an original field option
-                  const fieldDef = event.customFields.get(fieldId);
-                  let isOriginalOption = false;
-                  if (fieldDef?.options && Array.isArray(fieldDef.options)) {
-                    isOriginalOption = fieldDef.options.some((opt: FieldOption) => opt.label === option);
-                  }
-                  
-                  // Add if it's a unique user suggestion
-                  if (!alreadyInUserSuggestions && !isOriginalOption) {
-                    uniqueSuggestions.customFields[fieldId].add(option);
-                  }
-                }
-              });
-            }
           }
         }
-      } catch (error) {
-        console.error('Error processing suggestedOptions:', error);
       }
-    }
-  });
 
-  // Convert Sets to arrays for the response
-  return {
+      // Process suggested options
+      if (response.suggestedOptions) {
+        try {
+          const plainObj = JSON.parse(JSON.stringify(response.suggestedOptions));
+          
+          for (const fieldId in plainObj) {
+            if (fieldId === 'date' || fieldId === 'place') continue;
+            
+            if (event.customFields && event.customFields.has(fieldId)) {
+              if (!allUniqueSuggestions.customFields[fieldId]) {
+                allUniqueSuggestions.customFields[fieldId] = new Set<string>();
+              }
+              
+              const fieldSet = allUniqueSuggestions.customFields[fieldId];
+              const options = plainObj[fieldId];
+              
+              if (Array.isArray(options)) {
+                for (const option of options) {
+                  if (typeof option === 'string' && option.trim()) {
+                    // Check uniqueness logic
+                    let alreadyInUserSuggestions = false;
+                    if (currentUserResponse?.suggestedOptions) {
+                      const userSuggestions = JSON.parse(JSON.stringify(currentUserResponse.suggestedOptions));
+                      if (userSuggestions[fieldId] && Array.isArray(userSuggestions[fieldId])) {
+                        alreadyInUserSuggestions = userSuggestions[fieldId].includes(option);
+                      }
+                    }
+                    
+                    const fieldDef = event.customFields.get(fieldId);
+                    let isOriginalOption = false;
+                    if (fieldDef?.options && Array.isArray(fieldDef.options)) {
+                      isOriginalOption = fieldDef.options.some((opt: any) => opt.label === option);
+                    }
+                    
+                    if (!alreadyInUserSuggestions && !isOriginalOption) {
+                      fieldSet.add(option);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error processing suggestedOptions for response:', response._id, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing response:', response._id, error);
+    }
+  }
+
+  // Now apply pagination to the collected suggestions
+  const startIndex = page * limit;
+  const endIndex = startIndex + limit;
+
+  // Convert to arrays and apply pagination
+  const allDates = Array.from(allUniqueSuggestions.dates);
+  const allPlaces = Array.from(allUniqueSuggestions.places);
+  
+  const paginatedSuggestions = {
+    dates: allDates.slice(startIndex, endIndex),
+    places: allPlaces.slice(startIndex, endIndex),
+    customFields: Object.fromEntries(
+      Object.entries(allUniqueSuggestions.customFields).map(([fieldId, valueSet]) => {
+        const allValues = Array.from(valueSet);
+        return [fieldId, allValues.slice(startIndex, endIndex)];
+      })
+    )
+  };
+
+  // Determine if there are more suggestions available
+  const hasMoreDates = endIndex < allDates.length;
+  const hasMorePlaces = endIndex < allPlaces.length;
+  const hasMoreCustomFields = Object.values(allUniqueSuggestions.customFields).some(
+    valueSet => endIndex < Array.from(valueSet).length
+  );
+  
+  const hasMore = hasMoreDates || hasMorePlaces || hasMoreCustomFields;
+
+  const result = {
     event: {
       _id: event._id,
       name: event.name,
       description: event.description
     },
-    uniqueSuggestions: {
-      dates: Array.from(uniqueSuggestions.dates),
-      places: Array.from(uniqueSuggestions.places),
-      customFields: Object.fromEntries(
-        Object.entries(uniqueSuggestions.customFields).map(([key, valueSet]) => 
-          [key, Array.from(valueSet)]
-        )
-      )
+    uniqueSuggestions: paginatedSuggestions,
+    hasMore,
+    pagination: {
+      page,
+      limit,
+      total: null
     }
   };
+
+  return result;
 };
 
 

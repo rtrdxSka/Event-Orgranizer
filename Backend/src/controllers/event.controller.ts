@@ -113,7 +113,16 @@ export const getOtherUserResponsesHandler = catchErrors(async (req: Request, res
   const eventId = req.params.eventId;
   const userId = req.userId.toString();
   
-  const data = await getOtherUserResponses(eventId, userId);
+  // Add query parameters for pagination and limits
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100
+  const page = Math.max(parseInt(req.query.page as string) || 0, 0);
+  const maxSuggestionsPerField = Math.min(parseInt(req.query.maxSuggestions as string) || 50, 200);
+  
+  const data = await getOtherUserResponses(eventId, userId, {
+    limit,
+    page, 
+    maxSuggestionsPerField
+  });
 
   return res.status(OK).json({
     status: "success",
