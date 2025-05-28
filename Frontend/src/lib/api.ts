@@ -86,11 +86,38 @@ export const getUserEventResponse = async (eventId: string): Promise<{
   return response;
 };
 
-export const getOtherUserSuggestions = async (eventId: string): Promise<{
+export const getOtherUserSuggestions = async (
+  eventId: string,
+  options?: {
+    page?: number;
+    limit?: number;
+    maxSuggestions?: number;
+  }
+): Promise<{
   status: string;
-  data: OtherUserResponsesData;
+  data: OtherUserResponsesData & {
+    hasMore: boolean;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number | null;
+    };
+  };
 }> => {
-  const response = await API.get(`/event/${eventId}/other-responses`);
+  const params = new URLSearchParams();
+  
+  if (options?.page !== undefined) {
+    params.append('page', options.page.toString());
+  }
+  if (options?.limit) {
+    params.append('limit', options.limit.toString());
+  }
+  if (options?.maxSuggestions) {
+    params.append('maxSuggestions', options.maxSuggestions.toString());
+  }
+  
+  const url = `/event/${eventId}/other-responses${params.toString() ? `?${params}` : ''}`;
+  const response = await API.get(url);
   return response;
 };
 

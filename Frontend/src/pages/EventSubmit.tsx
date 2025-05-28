@@ -32,8 +32,9 @@ import {
 import { toast } from "sonner";
 import useAuth from "@/hooks/useAuth";
 import { formatEventResponseData } from "@/lib/utils/formatEventResponseData";
-import SuggestionDropdown from "@/components/EventSubmitComponents/SuggestionDropdown";
 import { navigate } from "@/lib/navigation";
+import { usePaginatedSuggestions } from "@/hooks/usePaginatedSuggestions";
+import PaginatedSuggestionDropdown from "@/components/EventSubmitComponents/PaginatedSuggestionDropdown";
 
 type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
 
@@ -125,23 +126,19 @@ const EventSubmit = () => {
     },
   });
 
-  const { data: otherUserSuggestions, isLoading: isLoadingOtherSuggestions } =
-    useQuery({
-      queryKey: ["otherUserSuggestions", event?._id],
-      queryFn: () => getOtherUserSuggestions(event?._id),
-      enabled: !!event?._id && !!user && !isLoading && !isLoadingUserResponse,
-      staleTime: Infinity, // Prevent unnecessary refetching
-      cacheTime: 1000 * 60 * 60, // Cache for an hour
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      retry: false,
-      onError: (error) => {
-        // Only show toast for real errors
-        if (error.status !== 404) {
-          console.error("Error fetching other suggestions:", error);
-        }
-      },
-    });
+const {
+  suggestions: paginatedSuggestions,
+  isLoading: isLoadingOtherSuggestions,
+  isLoadingMore,
+  hasMore,
+  totalLoaded,
+  loadMore,
+} = usePaginatedSuggestions({
+  eventId: event?._id || '',
+  enabled: !!event?._id && !!user && !isLoading && !isLoadingUserResponse,
+  maxSuggestionsPerField: 100,
+  limitPerPage: 20
+});
 
   // Populate the form with the user's previous response
   useEffect(() => {
@@ -995,34 +992,31 @@ const EventSubmit = () => {
                       )}
 
                       {/* Other users' suggested dates */}
-                      {otherUserSuggestions?.data?.uniqueSuggestions?.dates &&
-                        otherUserSuggestions.data.uniqueSuggestions.dates
-                          .length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-purple-600/30">
-                            <SuggestionDropdown
-                              fieldId="date"
-                              fieldTitle="Event Date"
-                              suggestions={
-                                otherUserSuggestions.data.uniqueSuggestions
-                                  .dates
-                              }
-                              onSelect={(dateStr) => {
-                                if (
-                                  event?.eventDates?.allowUserAdd &&
-                                  !event.eventDates.dates.includes(dateStr) &&
-                                  !suggestedDates.includes(dateStr)
-                                ) {
-                                  setSuggestedDates([
-                                    ...suggestedDates,
-                                    dateStr,
-                                  ]);
-                                  setValidationError(null);
-                                }
-                              }}
-                              type="date"
-                            />
-                          </div>
-                        )}
+                 {!isLoadingOtherSuggestions && paginatedSuggestions?.dates && paginatedSuggestions.dates.length > 0 && (
+  <div className="mt-4 pt-4 border-t border-purple-600/30">
+    <PaginatedSuggestionDropdown
+      fieldId="date"
+      fieldTitle="Event Date"
+      suggestions={paginatedSuggestions.dates}
+      onSelect={(dateStr) => {
+        if (
+          event?.eventDates?.allowUserAdd &&
+          !event.eventDates.dates.includes(dateStr) &&
+          !suggestedDates.includes(dateStr)
+        ) {
+          setSuggestedDates([...suggestedDates, dateStr]);
+          setValidationError(null);
+        }
+      }}
+      type="date"
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onLoadMore={loadMore}
+      totalLoaded={totalLoaded.dates}
+      maxSuggestions={100}
+    />
+  </div>
+)}
 
                       {/* Voting information */}
                       <div className="mt-4 bg-purple-800/30 p-3 rounded">
@@ -1203,34 +1197,31 @@ const EventSubmit = () => {
                       )}
 
                       {/* Other users' suggested places */}
-                      {otherUserSuggestions?.data?.uniqueSuggestions?.places &&
-                        otherUserSuggestions.data.uniqueSuggestions.places
-                          .length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-purple-600/30">
-                            <SuggestionDropdown
-                              fieldId="place"
-                              fieldTitle="Event Place"
-                              suggestions={
-                                otherUserSuggestions.data.uniqueSuggestions
-                                  .places
-                              }
-                              onSelect={(place) => {
-                                if (
-                                  event?.eventPlaces?.allowUserAdd &&
-                                  !event.eventPlaces.places.includes(place) &&
-                                  !suggestedPlaces.includes(place)
-                                ) {
-                                  setSuggestedPlaces([
-                                    ...suggestedPlaces,
-                                    place,
-                                  ]);
-                                  setValidationError(null);
-                                }
-                              }}
-                              type="place"
-                            />
-                          </div>
-                        )}
+                      {!isLoadingOtherSuggestions && paginatedSuggestions?.places && paginatedSuggestions.places.length > 0 && (
+  <div className="mt-4 pt-4 border-t border-purple-600/30">
+    <PaginatedSuggestionDropdown
+      fieldId="place"
+      fieldTitle="Event Place"
+      suggestions={paginatedSuggestions.places}
+      onSelect={(place) => {
+        if (
+          event?.eventPlaces?.allowUserAdd &&
+          !event.eventPlaces.places.includes(place) &&
+          !suggestedPlaces.includes(place)
+        ) {
+          setSuggestedPlaces([...suggestedPlaces, place]);
+          setValidationError(null);
+        }
+      }}
+      type="place"
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onLoadMore={loadMore}
+      totalLoaded={totalLoaded.places}
+      maxSuggestions={100}
+    />
+  </div>
+)}
 
                       {/* Voting information */}
                       <div className="mt-4 bg-purple-800/30 p-3 rounded">
@@ -1260,26 +1251,23 @@ const EventSubmit = () => {
                         {Object.entries(event.customFields).map(
                           ([fieldKey, fieldData]) => {
                             // Get suggestions for this specific field if available
-                            const fieldSuggestions =
-                              otherUserSuggestions?.data?.uniqueSuggestions
-                                ?.customFields?.[fieldKey] || [];
-
+                          
                             return (
-                              <CustomFieldRenderer
-                                key={fieldKey}
-                                field={{
-                                  ...fieldData,
-                                  id: fieldKey,
-                                }}
-                                formMethods={{
-                                  control,
-                                  watch,
-                                  setValue,
-                                  handleSubmit,
-                                  formState: { errors },
-                                }}
-                                suggestions={fieldSuggestions}
-                              />
+                             <CustomFieldRenderer
+  key={fieldKey}
+  field={{
+    ...fieldData,
+    id: fieldKey,
+  }}
+  formMethods={{
+    control,
+    watch,
+    setValue,
+    handleSubmit,
+    formState: { errors },
+  }}
+  suggestions={paginatedSuggestions?.customFields?.[fieldKey] || []}
+/>
                             );
                           }
                         )}

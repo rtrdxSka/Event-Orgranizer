@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, X, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SuggestionDropdown from './SuggestionDropdown';
+import PaginatedSuggestionDropdown from './PaginatedSuggestionDropdown';
 
 // Types for custom fields
 export type CustomFieldData = {
@@ -73,15 +74,20 @@ export const TextField: React.FC<CustomFieldProps> = ({
       />
       
       {/* Display suggestions dropdown if there are suggestions and field is not readonly */}
-      {!field.readonly && suggestions && suggestions.length > 0 && (
-        <SuggestionDropdown
-          fieldId={field.id}
-          fieldTitle={field.title}
-          suggestions={suggestions}
-          onSelect={handleSelectSuggestion}
-          type="custom"
-        />
-      )}
+{!field.readonly && suggestions && suggestions.length > 0 && (
+  <PaginatedSuggestionDropdown
+    fieldId={field.id}
+    fieldTitle={field.title}
+    suggestions={suggestions}
+    onSelect={handleSelectSuggestion}
+    type="custom"
+    hasMore={false} // Custom fields don't support pagination yet
+    isLoadingMore={false}
+    onLoadMore={() => {}} // No-op for custom fields
+    totalLoaded={suggestions.length}
+    maxSuggestions={100}
+  />
+)}
     </div>
   );
 };
@@ -303,15 +309,20 @@ export const RadioField: React.FC<CustomFieldProps> = ({
       )}
       
       {/* Suggestions from other users */}
-      {!field.readonly && suggestions && suggestions.length > 0 && (
-        <SuggestionDropdown
-          fieldId={field.id}
-          fieldTitle={field.title}
-          suggestions={suggestions}
-          onSelect={handleSelectSuggestion}
-          type="custom"
-        />
-      )}
+{!field.readonly && suggestions && suggestions.length > 0 && (
+  <PaginatedSuggestionDropdown
+    fieldId={field.id}
+    fieldTitle={field.title}
+    suggestions={suggestions}
+    onSelect={handleSelectSuggestion}
+    type="custom"
+    hasMore={false} // Custom fields don't support pagination yet
+    isLoadingMore={false}
+    onLoadMore={() => {}} // No-op for custom fields
+    totalLoaded={suggestions.length}
+    maxSuggestions={100}
+  />
+)}
     </div>
   );
 };
@@ -557,15 +568,20 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
       )}
       
       {/* Suggestions from other users */}
-      {!field.readonly && suggestions && suggestions.length > 0 && (
-        <SuggestionDropdown
-          fieldId={field.id}
-          fieldTitle={field.title}
-          suggestions={suggestions}
-          onSelect={handleSelectSuggestion}
-          type="custom"
-        />
-      )}
+{!field.readonly && suggestions && suggestions.length > 0 && (
+  <PaginatedSuggestionDropdown
+    fieldId={field.id}
+    fieldTitle={field.title}
+    suggestions={suggestions}
+    onSelect={handleSelectSuggestion}
+    type="custom"
+    hasMore={false} // Custom fields don't support pagination yet
+    isLoadingMore={false}
+    onLoadMore={() => {}} // No-op for custom fields
+    totalLoaded={suggestions.length}
+    maxSuggestions={100}
+  />
+)}
     </div>
   );
 };
@@ -731,13 +747,18 @@ export const ListField: React.FC<CustomFieldProps> = ({
         )}
         
         {/* Suggestions from other users */}
-        {canUserAdd && suggestions && suggestions.length > 0 && !hasReachedMaxEntries && (
-          <SuggestionDropdown
+    {canUserAdd && suggestions && suggestions.length > 0 && !hasReachedMaxEntries && (
+          <PaginatedSuggestionDropdown
             fieldId={field.id}
             fieldTitle={field.title}
             suggestions={suggestions}
             onSelect={handleSelectSuggestion}
             type="custom"
+            hasMore={false} // Custom fields don't support pagination yet
+            isLoadingMore={false}
+            onLoadMore={() => {}} // No-op for custom fields
+            totalLoaded={suggestions.length}
+            maxSuggestions={100}
           />
         )}
         
