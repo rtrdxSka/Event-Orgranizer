@@ -15,13 +15,15 @@ import EventSubmit from "./pages/EventSubmit"
 import MyEvents from "./pages/MyEvents"
 import EventEdit from "./pages/EventEdit"
 import FinalizedEventView from "./pages/FinalizedEventView"
+import ErrorBoundary from "./components/ErrorBoundary"
+import GoogleCalendarCallback from "./pages/GoogleCalendarCallback"
 
 
 function App() {
   const navigate = useNavigate();
   setNavigate(navigate);
   return (
-    <>
+   <ErrorBoundary>
     <Routes>
       <Route path="/" element={<Home />} />
       
@@ -65,6 +67,8 @@ function App() {
 <Route path="/event/edit/:eventId" element={<ProtectedRoute><EventEdit /></ProtectedRoute>} />
 
 <Route path="/event/finalized/:eventUUID" element={<FinalizedEventView />} />
+
+<Route path="/calendar-auth" element={<GoogleCalendarCallback />} />
 
       {/* Guest Routes */}
       <Route 
@@ -117,7 +121,7 @@ function App() {
         className: 'custom-toast',
       }}
     />
-    </>
+    </ErrorBoundary>
   );
 }
 
