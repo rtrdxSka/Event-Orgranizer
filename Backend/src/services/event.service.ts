@@ -532,9 +532,6 @@ export const getEventResponses = async (eventId: string) => {
 
 // services/event.service.ts - Optimized version
 
-// In event.service.ts, modify the getOtherUserResponses function
-// Replace the existing function with this version that properly limits suggestions per page
-
 export const getOtherUserResponses = async (
   eventId: string, 
   currentUserId: string,
@@ -714,28 +711,40 @@ export const getOtherUserResponses = async (
   };
 
   // Determine if there are more suggestions available
-  const hasMoreDates = endIndex < allDates.length;
-  const hasMorePlaces = endIndex < allPlaces.length;
-  const hasMoreCustomFields = Object.values(allUniqueSuggestions.customFields).some(
-    valueSet => endIndex < Array.from(valueSet).length
-  );
-  
-  const hasMore = hasMoreDates || hasMorePlaces || hasMoreCustomFields;
+// Determine if there are more suggestions available
+// Determine if there are more suggestions available for each field
+const hasMoreDates = endIndex < allDates.length;
+const hasMorePlaces = endIndex < allPlaces.length;
 
-  const result = {
-    event: {
-      _id: event._id,
-      name: event.name,
-      description: event.description
-    },
-    uniqueSuggestions: paginatedSuggestions,
-    hasMore,
-    pagination: {
-      page,
-      limit,
-      total: null
-    }
-  };
+// Per-field hasMore for custom fields
+const customFieldsHasMore = Object.fromEntries(
+  Object.entries(allUniqueSuggestions.customFields).map(([fieldId, valueSet]) => [
+    fieldId, 
+    endIndex < Array.from(valueSet).length
+  ])
+);
+
+const hasMore = hasMoreDates || hasMorePlaces || Object.values(customFieldsHasMore).some(Boolean);
+
+const result = {
+  event: {
+    _id: event._id,
+    name: event.name,
+    description: event.description
+  },
+  uniqueSuggestions: paginatedSuggestions,
+  hasMore,
+  hasMoreByField: {
+    dates: hasMoreDates,
+    places: hasMorePlaces,
+    customFields: customFieldsHasMore
+  },
+  pagination: {
+    page,
+    limit,
+    total: null
+  }
+};
 
   return result;
 };
