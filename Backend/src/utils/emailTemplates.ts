@@ -14,10 +14,32 @@ export const getVerifyEmailTemplate = (url: string) => ({
 
 export const getNewOptionsAddedTemplate = (eventName: string, eventUrl: string, newOptions: Record<string, string[]>) => {
   // Create a formatted list of categories and their new options
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch (e) {
+      return dateStr; // Return original string if parsing fails
+    }
+  };
+
+  // Create a formatted list of categories and their new options
   const categoryList = Object.entries(newOptions)
-    .map(([category, options]) => 
-      `<li style="margin-bottom: 12px;"><strong>${category}:</strong> ${options.join(', ')}</li>`
-    )
+    .map(([category, options]) => {
+      // Format dates if the category is "date"
+      const formattedOptions = category.toLowerCase() === 'date' 
+        ? options.map(option => formatDate(option))
+        : options;
+      
+      return `<li style="margin-bottom: 12px;"><strong>${category}:</strong> ${formattedOptions.join(', ')}</li>`;
+    })
     .join('');
 
   return {
