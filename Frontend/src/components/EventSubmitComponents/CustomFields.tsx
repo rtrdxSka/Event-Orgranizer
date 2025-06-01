@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Controller, UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, X, Users } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import SuggestionDropdown from './SuggestionDropdown';
 import PaginatedSuggestionDropdown from './PaginatedSuggestionDropdown';
+import { EventFormData } from '@/types';
 
 // Types for custom fields
 export type CustomFieldData = {
+  allowUserAddOptions: boolean;
   id: string;
   type: string;
   title: string;
@@ -25,27 +25,38 @@ export type CustomFieldData = {
   }>;
   values?: string[];
   maxEntries?: number;
+  maxOptions?: number;
   allowUserAdd?: boolean;
 };
 
 interface CustomFieldProps {
   field: CustomFieldData;
-  formMethods: UseFormReturn<any>;
+  formMethods: UseFormReturn<EventFormData>;
   suggestions?: string[]; // Added suggestions prop
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  totalLoaded?: number;
+  maxSuggestions?: number;
 }
 
 // Text Field Component
 export const TextField: React.FC<CustomFieldProps> = ({ 
   field, 
   formMethods,
-  suggestions 
+  suggestions,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  totalLoaded,
+  maxSuggestions
 }) => {
   const { control } = formMethods;
   const fieldId = `customFields.${field.id}`;
   
   // Handle selecting a suggestion
   const handleSelectSuggestion = (suggestion: string) => {
-    formMethods.setValue(fieldId, suggestion);
+    formMethods.setValue(fieldId as keyof EventFormData, suggestion);
   };
   
   return (
@@ -59,13 +70,14 @@ export const TextField: React.FC<CustomFieldProps> = ({
       </Label>
       
       <Controller
-        name={fieldId}
+        name={fieldId as keyof EventFormData}
         control={control}
         defaultValue={field.value || ''}
-        render={({ field: inputField }) => (
+        render={({ field: { value, ...inputField } }) => (
           <Input
             id={fieldId}
             {...inputField}
+            value={String(value || '')}
             placeholder={field.placeholder}
             readOnly={field.readonly}
             className="bg-purple-800/50 border-purple-600 text-purple-100"
@@ -81,11 +93,11 @@ export const TextField: React.FC<CustomFieldProps> = ({
     suggestions={suggestions}
     onSelect={handleSelectSuggestion}
     type="custom"
-    hasMore={false} // Custom fields don't support pagination yet
-    isLoadingMore={false}
-    onLoadMore={() => {}} // No-op for custom fields
-    totalLoaded={suggestions.length}
-    maxSuggestions={100}
+    hasMore={hasMore || false}
+    isLoadingMore={isLoadingMore || false}
+    onLoadMore={onLoadMore || (() => {})}
+    totalLoaded={totalLoaded || suggestions.length}
+    maxSuggestions={maxSuggestions || 100}
   />
 )}
     </div>
@@ -96,27 +108,38 @@ export const TextField: React.FC<CustomFieldProps> = ({
 export const RadioField: React.FC<CustomFieldProps> = ({ 
   field, 
   formMethods,
-  suggestions
+  suggestions,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  totalLoaded,
+  maxSuggestions
 }) => {
-  const { control, setValue, watch } = formMethods;
+  const { setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
   const [newOption, setNewOption] = useState('');
+
+  console.log('RadioField placeholder:', field.placeholder);
   
   // Track user-added options separately
   const [userAddedOptions, setUserAddedOptions] = useState<Array<{id: number, label: string}>>([]);
-  const formValue = watch(fieldId) || { value: '', userAddedOptions: [] };
+  interface RadioFieldValue {
+    value: string;
+    userAddedOptions: string[];
+  }
+  const formValue = (watch(fieldId as keyof EventFormData) || { value: '', userAddedOptions: [] }) as RadioFieldValue;
   
   // Initialize userAddedOptions from form state on mount
   useEffect(() => {
-    const currentValue = watch(fieldId);
-    if (currentValue?.userAddedOptions && Array.isArray(currentValue.userAddedOptions)) {
+    const currentValue = watch(fieldId as keyof EventFormData);
+    if (typeof currentValue === 'object' && 'userAddedOptions' in currentValue && Array.isArray(currentValue.userAddedOptions)) {
       const options = currentValue.userAddedOptions.map((label, index) => ({
-        id: `user_${label.replace(/\s+/g, '_').toLowerCase()}`,
+        id: Date.now() + index,
         label
       }));
       setUserAddedOptions(options);
     }
-  }, [watch(fieldId)]);
+  }, [fieldId, watch]);
   
   const allOptions = [...(field.options || []), ...userAddedOptions];
   const hasReachedMaxOptions = field.maxOptions && allOptions.length >= field.maxOptions;
@@ -139,17 +162,17 @@ export const RadioField: React.FC<CustomFieldProps> = ({
       // Update form state
       const updatedUserOptions = [...(formValue.userAddedOptions || []), suggestion];
       
-      setValue(fieldId, {
-        ...formValue,
-        value: suggestion, // Also select the newly added option
-        userAddedOptions: updatedUserOptions
-      });
+(setValue as unknown as (field: string, value: unknown) => void)(fieldId, {
+  ...formValue,
+  value: suggestion, // Also select the newly added option
+  userAddedOptions: updatedUserOptions
+});
     } else if (optionExists) {
       // If option already exists, just select it
-      setValue(fieldId, {
-        ...formValue,
-        value: suggestion
-      });
+      (setValue as unknown as (field: string, value: unknown) => void)(fieldId, {
+    ...formValue,
+    value: suggestion
+  });
     }
   };
   
@@ -175,10 +198,10 @@ export const RadioField: React.FC<CustomFieldProps> = ({
       // Update the form data to track all user-added options
       const updatedUserOptions = [...(formValue.userAddedOptions || []), newOption.trim()];
       
-      setValue(fieldId, {
-        ...formValue,
-        userAddedOptions: updatedUserOptions
-      });
+      (setValue as (field: string, value: Record<string, unknown>) => void)(fieldId, {
+  ...formValue,
+  userAddedOptions: updatedUserOptions
+});
       
       setNewOption('');
     }
@@ -200,20 +223,20 @@ export const RadioField: React.FC<CustomFieldProps> = ({
       // If currently selected value is being removed, clear selection
       const newValue = formValue.value === optionBeingRemoved.label ? '' : formValue.value;
       
-      setValue(fieldId, {
-        value: newValue,
-        userAddedOptions: updatedUserOptions
-      });
+(setValue as (field: string, value: Record<string, unknown>) => void)(fieldId, {
+  value: newValue,
+  userAddedOptions: updatedUserOptions
+});
     }
   };
   
   // Handle option selection
   const handleOptionSelect = (value: string) => {
     // Update the form value with the selected option
-    setValue(fieldId, {
-      ...formValue,
-      value
-    });
+(setValue as (field: string, value: Record<string, unknown>) => void)(fieldId, {
+  ...formValue,
+  value
+});
   };
   
   return (
@@ -222,6 +245,7 @@ export const RadioField: React.FC<CustomFieldProps> = ({
         {field.title}
         {field.required && <span className="text-red-400 ml-1">*</span>}
       </Label>
+      
       
       <div className="space-y-2">
         {/* Original options */}
@@ -233,6 +257,7 @@ export const RadioField: React.FC<CustomFieldProps> = ({
               checked={formValue.value === option.label}
               onChange={() => handleOptionSelect(option.label)}
               className="text-purple-600 border-purple-400 bg-purple-800/50"
+              placeholder={field.placeholder || "Enter a new option"}
             />
             <Label 
               htmlFor={`${fieldId}-${option.id}`} 
@@ -253,6 +278,7 @@ export const RadioField: React.FC<CustomFieldProps> = ({
                 checked={formValue.value === option.label}
                 onChange={() => handleOptionSelect(option.label)}
                 className="text-purple-600 border-purple-400 bg-purple-800/50"
+                placeholder={field.placeholder || "Enter a new option"}
               />
               <Label 
                 htmlFor={`${fieldId}-${option.id}`} 
@@ -287,7 +313,7 @@ export const RadioField: React.FC<CustomFieldProps> = ({
               <Input
                 value={newOption}
                 onChange={(e) => setNewOption(e.target.value)}
-                placeholder="Enter a new option"
+                placeholder={field.placeholder || "Enter a new option"}
                 className="bg-purple-800/50 border-purple-600 text-purple-100"
               />
               <Button
@@ -316,11 +342,11 @@ export const RadioField: React.FC<CustomFieldProps> = ({
     suggestions={suggestions}
     onSelect={handleSelectSuggestion}
     type="custom"
-    hasMore={false} // Custom fields don't support pagination yet
-    isLoadingMore={false}
-    onLoadMore={() => {}} // No-op for custom fields
-    totalLoaded={suggestions.length}
-    maxSuggestions={100}
+   hasMore={hasMore || false}
+    isLoadingMore={isLoadingMore || false}
+    onLoadMore={onLoadMore || (() => {})}
+    totalLoaded={totalLoaded || suggestions.length}
+    maxSuggestions={maxSuggestions || 100}
   />
 )}
     </div>
@@ -331,7 +357,12 @@ export const RadioField: React.FC<CustomFieldProps> = ({
 export const CheckboxField: React.FC<CustomFieldProps> = ({ 
   field, 
   formMethods,
-  suggestions 
+  suggestions,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  totalLoaded,
+  maxSuggestions
 }) => {
   const { setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
@@ -341,19 +372,21 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
   const [userAddedOptions, setUserAddedOptions] = useState<Array<{id: string, label: string}>>([]);
   
   // Watch the form value
-  const formValue = watch(fieldId) || { userAddedOptions: [] };
+  const formValue = watch(fieldId as keyof EventFormData) || { userAddedOptions: [] };
   
   // Initialize userAddedOptions from form state on mount
   useEffect(() => {
-    const currentValue = watch(fieldId);
-    if (currentValue?.userAddedOptions && Array.isArray(currentValue.userAddedOptions)) {
-      const options = currentValue.userAddedOptions.map(label => {
+    const currentValue = watch(fieldId as keyof EventFormData);
+    if (typeof currentValue === 'object' && 
+        'userAddedOptions' in currentValue && 
+        Array.isArray((currentValue as { userAddedOptions: string[] }).userAddedOptions)) {
+      const options = (currentValue as { userAddedOptions: string[] }).userAddedOptions.map(label => {
         const id = `user_${label.replace(/\s+/g, '_').toLowerCase()}`;
         return { id, label };
       });
       setUserAddedOptions(options);
     }
-  }, [watch(fieldId)]);
+  }, [watch(fieldId as keyof EventFormData)]);
   
   // Calculate if we've reached max options
   const allOptions = [
@@ -385,14 +418,14 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
     setUserAddedOptions([...userAddedOptions, newUserOption]);
     
     // Update form value - add to userAddedOptions array and initialize as unchecked
-    const updatedUserOptions = [...(formValue.userAddedOptions || []), optionLabel];
-    const updatedFormValue = {
-      ...formValue,
-      userAddedOptions: updatedUserOptions
-    };
+    const updatedUserOptions = [...(typeof formValue === 'object' && formValue && 'userAddedOptions' in formValue ? formValue.userAddedOptions || [] : []), optionLabel];
+const updatedFormValue = {
+  ...(typeof formValue === 'object' && formValue ? formValue : {}),
+  userAddedOptions: updatedUserOptions
+} as Record<string, boolean | string[]>;
     updatedFormValue[optionId] = false; // Initialize as unchecked
     
-    setValue(fieldId, updatedFormValue);
+    setValue(fieldId as never, updatedFormValue as never);
     setNewOption('');
   };
   
@@ -402,27 +435,30 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
     setUserAddedOptions(userAddedOptions.filter(opt => opt.id !== option.id));
     
     // Update form value
-    const updatedFormValue = { ...formValue };
-    
-    // Remove from userAddedOptions array
-    if (updatedFormValue.userAddedOptions) {
-      updatedFormValue.userAddedOptions = updatedFormValue.userAddedOptions.filter(
-        label => label !== option.label
-      );
-    }
+const updatedFormValue = { 
+  ...(typeof formValue === 'object' && formValue ? formValue : {}) 
+} as Record<string, string[] | boolean | unknown>;
+
+if ('userAddedOptions' in updatedFormValue && Array.isArray(updatedFormValue.userAddedOptions)) {
+  updatedFormValue.userAddedOptions = (updatedFormValue.userAddedOptions as string[]).filter(
+    (label: string) => label !== option.label
+  );
+}
     
     // Remove the option's checked property
     delete updatedFormValue[option.id];
     
-    setValue(fieldId, updatedFormValue);
+    setValue(fieldId as never, updatedFormValue as never);
   };
   
   // Handle checkbox change
-  const handleCheckboxChange = (optionId: string, checked: boolean) => {
-    const updatedFormValue = { ...formValue };
-    updatedFormValue[optionId] = checked;
-    setValue(fieldId, updatedFormValue);
-  };
+const handleCheckboxChange = (optionId: string, checked: boolean) => {
+  const updatedFormValue = { 
+    ...(typeof formValue === 'object' && formValue ? formValue : {}) 
+  } as Record<string, boolean | string[] | unknown>;
+  updatedFormValue[optionId] = checked;
+  setValue(fieldId as never, updatedFormValue as never);
+};
   
   // Handle selecting a suggestion from other users
   const handleSelectSuggestion = (suggestion: string) => {
@@ -440,29 +476,31 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
       setUserAddedOptions([...userAddedOptions, newUserOption]);
       
       // Update form value - add to userAddedOptions array and initialize as checked
-      const updatedUserOptions = [...(formValue.userAddedOptions || []), suggestion];
-      const updatedFormValue = {
-        ...formValue,
-        userAddedOptions: updatedUserOptions
-      };
+      const updatedUserOptions = [...(typeof formValue === 'object' && formValue && 'userAddedOptions' in formValue ? formValue.userAddedOptions || [] : []), suggestion];
+const updatedFormValue = {
+  ...(typeof formValue === 'object' && formValue ? formValue : {}),
+  userAddedOptions: updatedUserOptions
+} as Record<string, boolean | string[]>;
       updatedFormValue[optionId] = true; // Initialize as checked
       
-      setValue(fieldId, updatedFormValue);
+      setValue(fieldId as never, updatedFormValue as never);
     } else if (optionExists) {
       // If option already exists, find its ID
       const existingOption = allOptions.find(opt => 
         opt.label.toLowerCase() === suggestion.toLowerCase()
       );
       
-      if (existingOption) {
-        const optionId = typeof existingOption.id === 'number' 
-          ? existingOption.id.toString() 
-          : existingOption.id;
-        
-        // Toggle the checkbox
-        const currentValue = formValue[optionId] || false;
-        handleCheckboxChange(optionId, !currentValue);
-      }
+     if (existingOption) {
+  const optionId = typeof existingOption.id === 'number' 
+    ? existingOption.id.toString() 
+    : existingOption.id;
+  
+  // Toggle the checkbox
+  const currentValue = (typeof formValue === 'object' && formValue && optionId in formValue) 
+    ? (formValue as unknown as Record<string, boolean>)[optionId] || false
+    : false;
+  handleCheckboxChange(optionId, !currentValue);
+}
     }
   };
   
@@ -476,8 +514,10 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
       <div className="space-y-2">
         {/* Original options */}
         {(field.options || []).map((option) => {
-          const optionId = option.id.toString();
-          const isChecked = formValue[optionId] === true;
+  const optionId = option.id.toString();
+  const isChecked = (typeof formValue === 'object' && formValue && optionId in formValue) 
+    ? (formValue as unknown as Record<string, boolean>)[optionId] === true
+    : false;
           
           return (
             <div key={`original-${option.id}`} className="flex items-center space-x-2 p-2 bg-purple-800/40 rounded">
@@ -487,6 +527,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
                 checked={isChecked}
                 onChange={(e) => handleCheckboxChange(optionId, e.target.checked)}
                 className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                placeholder={field.placeholder || "Enter a new option"}
               />
               <Label 
                 htmlFor={`${fieldId}-${optionId}`} 
@@ -500,7 +541,9 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
         
         {/* User-added options */}
         {userAddedOptions.map((option) => {
-          const isChecked = formValue[option.id] === true;
+  const isChecked = (typeof formValue === 'object' && formValue && option.id in formValue) 
+    ? (formValue as unknown as Record<string, boolean>)[option.id] === true
+    : false;
           
           return (
             <div key={`user-${option.id}`} className="flex items-center justify-between p-2 bg-purple-700/40 rounded border border-purple-500/30">
@@ -511,6 +554,7 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
                   checked={isChecked}
                   onChange={(e) => handleCheckboxChange(option.id, e.target.checked)}
                   className="rounded text-purple-600 border-purple-400 bg-purple-800/50 focus:ring-purple-500 focus:ring-offset-purple-900"
+                  placeholder={field.placeholder || "Enter a new option"}
                 />
                 <Label 
                   htmlFor={`${fieldId}-${option.id}`} 
@@ -546,8 +590,8 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
               <Input
                 value={newOption}
                 onChange={(e) => setNewOption(e.target.value)}
-                placeholder="Enter a new option"
                 className="bg-purple-800/50 border-purple-600 text-purple-100"
+                placeholder={field.placeholder || "Enter a new option"}
               />
               <Button
                 type="button"
@@ -575,11 +619,11 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
     suggestions={suggestions}
     onSelect={handleSelectSuggestion}
     type="custom"
-    hasMore={false} // Custom fields don't support pagination yet
-    isLoadingMore={false}
-    onLoadMore={() => {}} // No-op for custom fields
-    totalLoaded={suggestions.length}
-    maxSuggestions={100}
+    hasMore={hasMore || false}
+    isLoadingMore={isLoadingMore || false}
+    onLoadMore={onLoadMore || (() => {})}
+    totalLoaded={totalLoaded || suggestions.length}
+    maxSuggestions={maxSuggestions || 100}
   />
 )}
     </div>
@@ -590,10 +634,17 @@ export const CheckboxField: React.FC<CustomFieldProps> = ({
 export const ListField: React.FC<CustomFieldProps> = ({ 
   field, 
   formMethods, 
-  suggestions 
+  suggestions,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  totalLoaded,
+  maxSuggestions
 }) => {
   const { setValue, watch } = formMethods;
   const fieldId = `customFields.${field.id}`;
+
+  
   
   // Determine if field is editable
   const isEditable = !field.readonly;
@@ -603,19 +654,25 @@ export const ListField: React.FC<CustomFieldProps> = ({
   
   // Initialize the form field with existing values
   useEffect(() => {
-    const formValues = watch(fieldId);
+    const formValues = watch(fieldId as never);
     
     // If no form values but field has values, initialize with field values
     if ((!formValues || formValues.length === 0) && field.values && field.values.length > 0) {
-      setValue(fieldId, [...field.values]);
+      setValue(fieldId as never, [...field.values] as never);
     }
   }, [field.id, field.values, fieldId, setValue, watch]);
+
+
   
   // Get the current values from form state with fallback
-  const formValues = watch(fieldId) || [];
+  const formValues = watch(fieldId as never) || [];
   
   // Original values are those from the field definition
   const originalValues = field.values || [];
+
+  console.log('Field values:', field.values);
+console.log('Original values:', originalValues);
+console.log('Form values:', formValues);
   
   // User-added values are any beyond the original values length
   const userValues = formValues.length > originalValues.length 
@@ -623,22 +680,25 @@ export const ListField: React.FC<CustomFieldProps> = ({
     : [];
   
   // Check if we've reached the maximum number of entries
-  const hasReachedMaxEntries = field.maxEntries > 0 && 
-    formValues.length >= field.maxEntries;
+const hasReachedMaxEntries = (field.maxEntries && field.maxEntries > 0) && 
+  formValues.length >= field.maxEntries;
   
   // Handle adding a new empty input
   const handleAddEmpty = () => {
     if (canUserAdd && !hasReachedMaxEntries) {
-      setValue(fieldId, [...formValues, '']);
+      setValue(fieldId as never, [...formValues, ''] as never);
     }
   };
   
   // Handle updating a value
-  const handleValueChange = (index: number, value: string) => {
+const handleValueChange = (index: number, value: string) => {
+  // Only allow modification of user-added values (beyond original values)
+  if (index >= originalValues.length) {
     const newValues = [...formValues];
     newValues[index] = value;
-    setValue(fieldId, newValues);
-  };
+    setValue(fieldId as never, newValues as never);
+  }
+};
   
   // Handle removing a value
   const handleRemoveValue = (index: number) => {
@@ -646,7 +706,7 @@ export const ListField: React.FC<CustomFieldProps> = ({
     if (index >= originalValues.length) {
       const newValues = [...formValues];
       newValues.splice(index, 1);
-      setValue(fieldId, newValues);
+      setValue(fieldId as never, newValues as never);
     }
   };
   
@@ -656,18 +716,18 @@ export const ListField: React.FC<CustomFieldProps> = ({
     if (canUserAdd && !hasReachedMaxEntries) {
       // Check if suggestion already exists in the list
       const suggestionExists = formValues.some(value => 
-        value.toLowerCase() === suggestion.toLowerCase()
+        typeof value === 'string' && value.toLowerCase() === suggestion.toLowerCase()
       );
       
       if (!suggestionExists) {
         // Add the suggestion to the list
-        setValue(fieldId, [...formValues, suggestion]);
+        setValue(fieldId as never, [...formValues, suggestion] as never);
       }
     }
   };
   
   return (
-    <div className="bg-purple-800/30 rounded-lg p-4 mb-4">
+    <div className="bg-purple-800/30 rounded-lg p-4 mb-4 ">
       <Label className="text-purple-100 mb-3 block font-medium text-lg">
         {field.title}
         {field.required && <span className="text-red-400 ml-1">*</span>}
@@ -687,12 +747,12 @@ export const ListField: React.FC<CustomFieldProps> = ({
                     </div>
                   ) : (
                     <Input
-                      value={index < formValues.length ? formValues[index] : value}
-                      onChange={(e) => handleValueChange(index, e.target.value)}
-                      className="bg-purple-800/50 border-purple-600 text-purple-100"
-                      placeholder={field.placeholder || `Enter ${field.title.toLowerCase()}`}
-                      readOnly={field.readonly}
-                    />
+  value={index < formValues.length ? String(formValues[index]) : value}
+  onChange={(e) => handleValueChange(index, e.target.value)}
+  className="bg-purple-800/50 border-purple-600 text-purple-100"
+  placeholder={field.placeholder || `Enter ${field.title.toLowerCase()}`}
+  readOnly={field.readonly}
+/>
                   )}
                 </div>
               ))}
@@ -711,7 +771,7 @@ export const ListField: React.FC<CustomFieldProps> = ({
                 return (
                   <div key={`user-${index}`} className="flex items-center space-x-2">
                     <Input
-                      value={value}
+                      value={String(value)}
                       onChange={(e) => handleValueChange(actualIndex, e.target.value)}
                       className="bg-purple-800/50 border-purple-600 text-purple-100"
                       placeholder={field.placeholder || `Enter ${field.title.toLowerCase()}`}
@@ -747,23 +807,24 @@ export const ListField: React.FC<CustomFieldProps> = ({
         )}
         
         {/* Suggestions from other users */}
-    {canUserAdd && suggestions && suggestions.length > 0 && !hasReachedMaxEntries && (
-          <PaginatedSuggestionDropdown
-            fieldId={field.id}
-            fieldTitle={field.title}
-            suggestions={suggestions}
-            onSelect={handleSelectSuggestion}
-            type="custom"
-            hasMore={false} // Custom fields don't support pagination yet
-            isLoadingMore={false}
-            onLoadMore={() => {}} // No-op for custom fields
-            totalLoaded={suggestions.length}
-            maxSuggestions={100}
-          />
-        )}
+{/* Suggestions from other users */}
+{!field.readonly && suggestions && suggestions.length > 0 && (
+  <PaginatedSuggestionDropdown
+    fieldId={field.id}
+    fieldTitle={field.title}
+    suggestions={suggestions}
+    onSelect={handleSelectSuggestion}
+    type="custom"
+    hasMore={hasMore || false}
+    isLoadingMore={isLoadingMore || false}
+    onLoadMore={onLoadMore || (() => {})}
+    totalLoaded={totalLoaded || suggestions.length}
+    maxSuggestions={maxSuggestions || 100}
+  />
+)}
         
         {/* Messages */}
-        {hasReachedMaxEntries && (
+        {hasReachedMaxEntries && !field.readonly &&(
           <p className="text-amber-400 text-sm mt-1">
             Maximum entries reached ({field.maxEntries})
           </p>
@@ -798,7 +859,7 @@ const CustomFieldRenderer: React.FC<CustomFieldProps> = (props) => {
       return <ListField {...props} />;
     default:
       return (
-        <div className="bg-purple-800/30 rounded-lg p-4 mb-4 text-red-300">
+        <div className="bg-purple-800/30 rounded-lg p-4 mb-4 text-red-300 ">
           Unknown field type: {field.type}
         </div>
       );

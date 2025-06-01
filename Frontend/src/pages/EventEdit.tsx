@@ -1,20 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ChartOptions, ChartEvent, ActiveElement, TooltipItem } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import Navbar from '@/components/NavBar';
-import { Loader2, XCircle, Users, List, X, MessageSquare, LayoutDashboard, CheckCircle, UserCircle, Clock, Calendar, MapPin, ListChecks, AlertCircle, ExternalLink } from 'lucide-react';
-import { getEventForOwner, getFinalizedEvent } from '@/lib/api';
+import { Loader2, XCircle, Users, List, X, MessageSquare, LayoutDashboard, CheckCircle, ExternalLink } from 'lucide-react';
+import { getEventForOwner } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import EventVisualization from '@/components/EventEditComponents/EventVisualization';
 import EventStatusManagement from '@/components/EventEditComponents/EventStatusManagement';
 import { toast } from 'sonner';
 import { validateFinalizations, checkEmptyOptionalFields } from '@/lib/validations/eventFinalize.schemas';
-import type { FinalizeSelections as FinalizeSelectionsType } from '@/lib/validations/eventFinalize.schemas';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { navigate } from '@/lib/navigation';
+import { EventOwnerResponse } from '@/types';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -26,48 +25,6 @@ interface Voter {
   name?: string;
 }
 
-interface ChartOption {
-  optionName: string;
-  voteCount: number;
-  voters: string[]; // Array of voter IDs
-  voterDetails: Voter[]; // Array of voter objects with details
-  addedBy?: any | null;
-  isOriginal?: boolean;
-}
-
-interface CategoryChartData {
-  categoryName: string;
-  options: ChartOption[];
-}
-
-interface ListFieldChartData {
-  fieldId: string;
-  categoryName: string;
-  fieldType: 'list';
-  options: ChartOption[];
-}
-
-// Interface for text field responses
-interface TextFieldResponse {
-  userId: string;
-  userEmail: string;
-  userName?: string;
-  response: string;
-}
-
-interface TextFieldResponseData {
-  fieldId: string;
-  categoryName: string;
-  responses: TextFieldResponse[];
-}
-
-interface EventOwnerData {
-  event: any;
-  responses: any[];
-  chartsData: CategoryChartData[];
-  listFieldsData: ListFieldChartData[];
-  textFieldsData: TextFieldResponseData[];
-}
 
 // Interface for tracking finalization selections
 interface FinalizeSelections {
@@ -92,40 +49,32 @@ const EventEdit = () => {
   });
 
   // Fetch event data
-  const { 
-    data: eventData, 
-    isLoading, 
-    isError, 
-    error 
-  } = useQuery<EventOwnerData, Error>({
-    queryKey: ['eventEdit', eventId],
-    queryFn: () => getEventForOwner(eventId || ''),
-    enabled: !!eventId,
-    onSuccess: (data) => {
-      // Set defaults for active categories
-      if (data.chartsData && data.chartsData.length > 0) {
-        setActiveCategory(data.chartsData[0].categoryName);
-      }
-      if (data.listFieldsData && data.listFieldsData.length > 0) {
-        setActiveListField(data.listFieldsData[0].fieldId);
-      }
-      if (data.textFieldsData && data.textFieldsData.length > 0) {
-        setActiveTextField(data.textFieldsData[0].fieldId);
-      }
+const { 
+  data: eventData, 
+  isLoading, 
+  isError, 
+  error 
+} = useQuery<EventOwnerResponse, Error>({
+  queryKey: ['eventEdit', eventId],
+  queryFn: () => getEventForOwner(eventId || ''),
+  enabled: !!eventId,
+});
+
+// Add this useEffect to handle the side effects when data changes
+useEffect(() => {
+  if (eventData) {
+    // Set defaults for active categories
+    if (eventData.chartsData && eventData.chartsData.length > 0) {
+      setActiveCategory(eventData.chartsData[0].categoryName);
     }
-  });
-
-
-    // Fetch finalized event data when event is finalized
-  const { 
-    data: finalizedEventData, 
-    isLoading: isFinalizedLoading,
-    isError: isFinalizedError 
-  } = useQuery<FinalizedEventData>({
-    queryKey: ['finalizedEvent', eventData?.event?.eventUUID],
-    queryFn: () => getFinalizedEvent(eventData?.event?.eventUUID || ''),
-    enabled: !!eventData?.event?.eventUUID && eventData?.event?.status === 'finalized',
-  });
+    if (eventData.listFieldsData && eventData.listFieldsData.length > 0) {
+      setActiveListField(eventData.listFieldsData[0].fieldId);
+    }
+    if (eventData.textFieldsData && eventData.textFieldsData.length > 0) {
+      setActiveTextField(eventData.textFieldsData[0].fieldId);
+    }
+  }
+}, [eventData]);
 
   
 
@@ -188,10 +137,10 @@ const EventEdit = () => {
     return null;
   };
   
-  const getFinalCustomFieldSelections = (): Record<string, any> => {
+  const getFinalCustomFieldSelections = (): Record<string, string | string[]> => {
     if (!eventData) return {};
     
-    const customFields: Record<string, any> = {};
+    const customFields: Record<string, string | string[]> = {};
     
     // Process selections from voting categories (radio & checkbox fields)
     eventData.chartsData.forEach(category => {
@@ -274,26 +223,6 @@ const EventEdit = () => {
     });
   };
 
-  // Group fields by type for better organization
-  const groupFieldsByType = (selections: Record<string, CustomFieldSelection> | undefined) => {
-    if (!selections) return {};
-    
-    const grouped: Record<string, CustomFieldSelection[]> = {
-      text: [],
-      radio: [],
-      checkbox: [],
-      list: []
-    };
-    
-    Object.values(selections).forEach(selection => {
-      if (selection.fieldType in grouped) {
-        grouped[selection.fieldType].push(selection);
-      }
-    });
-    
-    return grouped;
-  };
-
   // Get chart data for currently selected category
   const getVotingChartData = (categoryName: string) => {
     if (!eventData) return null;
@@ -373,31 +302,31 @@ const EventEdit = () => {
   };
 
   // Handle chart click to show voters
-  const handleChartClick = (event: any, elements: any[]) => {
-    if (elements.length === 0) {
-      setSelectedOption(null);
-      return;
-    }
+  const handleChartClick = (event: ChartEvent, elements: ActiveElement[]) => {
+  if (elements.length === 0) {
+    setSelectedOption(null);
+    return;
+  }
 
-    const { index } = elements[0];
-    let rawOptions;
-    
-    if (activeTab === 'voting') {
-      const chartData = getVotingChartData(activeCategory!);
-      rawOptions = chartData?._rawOptions;
-    } else if (activeTab === 'list') {
-      const chartData = getListFieldChartData(activeListField!);
-      rawOptions = chartData?._rawOptions;
-    }
+  const { index } = elements[0];
+  let rawOptions;
+  
+  if (activeTab === 'voting') {
+    const chartData = getVotingChartData(activeCategory!);
+    rawOptions = chartData?._rawOptions;
+  } else if (activeTab === 'list') {
+    const chartData = getListFieldChartData(activeListField!);
+    rawOptions = chartData?._rawOptions;
+  }
 
-    if (rawOptions && index < rawOptions.length) {
-      const option = rawOptions[index];
-      setSelectedOption({
-        optionName: option.optionName,
-        voterDetails: option.voterDetails
-      });
-    }
-  };
+  if (rawOptions && index < rawOptions.length) {
+    const option = rawOptions[index];
+    setSelectedOption({
+      optionName: option.optionName,
+      voterDetails: option.voterDetails
+    });
+  }
+};
 
   // Validate finalization selections
   // Replace the existing validateFinalizeSelections function with this updated version
@@ -414,7 +343,7 @@ const validateFinalizeSelections = () => {
     for (const [fieldId, field] of Object.entries(eventData.event.customFields)) {
       // Only check required fields
       if (field.required) {
-        const fieldValue = preparedData.customFields?.[fieldId];
+        const fieldValue = preparedData?.customFields?.[fieldId];
         
         // Log the field being checked for debugging
         console.log(`Checking required field "${field.title}" (${fieldId}):`, { 
@@ -442,7 +371,7 @@ const validateFinalizeSelections = () => {
   // Check date selection if date voting is present
   const dateCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'date');
   if (dateCategory && dateCategory.options.length > 0) {
-    const dateSelection = preparedData.date;
+    const dateSelection = preparedData?.date;
     if (!dateSelection) {
       const errorMessage = "Please select a date for the event";
       toast.error(errorMessage);
@@ -454,7 +383,7 @@ const validateFinalizeSelections = () => {
   // Check place selection if place voting is present
   const placeCategory = eventData.chartsData.find(c => c.categoryName.toLowerCase() === 'place');
   if (placeCategory && placeCategory.options.length > 0) {
-    const placeSelection = preparedData.place;
+    const placeSelection = preparedData?.place;
     if (!placeSelection) {
       const errorMessage = "Please select a location for the event";
       toast.error(errorMessage);
@@ -485,68 +414,69 @@ const validateFinalizeSelections = () => {
   return true;
 };
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    indexAxis: 'y' as const,
-    onClick: handleChartClick,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) => {
-            const value = context.raw;
-            return `${value} ${value === 1 ? (activeTab === 'voting' ? 'vote' : 'response') : 
-              (activeTab === 'voting' ? 'votes' : 'responses')}`;
-          },
-          footer: (tooltipItems: any) => {
-            const index = tooltipItems[0].dataIndex;
-            let rawOptions;
-            
-            if (activeTab === 'voting') {
-              const chartData = getVotingChartData(activeCategory!);
-              rawOptions = chartData?._rawOptions;
-            } else if (activeTab === 'list') {
-              const chartData = getListFieldChartData(activeListField!);
-              rawOptions = chartData?._rawOptions;
-            }
-            
-            if (rawOptions && index < rawOptions.length) {
-              return 'Click to see voters';
-            }
-            return '';
-          }
-        }
-      }
+  const chartOptions: ChartOptions<'bar'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  indexAxis: 'y' as const,
+  onClick: (event: ChartEvent, elements: ActiveElement[]) => handleChartClick(event, elements),
+  plugins: {
+    legend: {
+      display: false,
     },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: function(value: any, index: number, values: any) {
-            const label = this.getLabelForValue(index);
-            // Truncate label if too long
-            return label.length > 25 ? label.substring(0, 22) + '...' : label;
+    tooltip: {
+      callbacks: {
+        label: (context: TooltipItem<'bar'>) => {
+          const value = context.raw;
+          return `${value} ${value === 1 ? (activeTab === 'voting' ? 'vote' : 'response') : 
+            (activeTab === 'voting' ? 'votes' : 'responses')}`;
+        },
+        footer: (tooltipItems: TooltipItem<'bar'>[]) => {
+          const index = tooltipItems[0].dataIndex;
+          let rawOptions;
+          
+          if (activeTab === 'voting') {
+            const chartData = getVotingChartData(activeCategory!);
+            rawOptions = chartData?._rawOptions;
+          } else if (activeTab === 'list') {
+            const chartData = getListFieldChartData(activeListField!);
+            rawOptions = chartData?._rawOptions;
           }
-        }
-      },
-      x: {
-        beginAtZero: true,
-        ticks: {
-          stepSize: 1
+          
+          if (rawOptions && index < rawOptions.length) {
+            return 'Click to see voters';
+          }
+          return '';
         }
       }
     }
-  };
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: {
+        callback: function(value: string | number, index: number) {
+          const label = this.getLabelForValue(index);
+          return label.length > 25 ? label.substring(0, 22) + '...' : label;
+        }
+      }
+    },
+    x: {
+      beginAtZero: true,
+      ticks: {
+        stepSize: 1
+      }
+    }
+  }
+};
 
   // Component to display the list of voters for a selected option
   const VotersList = ({ option }: { option: {optionName: string, voterDetails: Voter[]} }) => {
     return (
       <div className="absolute top-4 right-4 w-72 bg-purple-900/80 border border-purple-700 rounded-lg shadow-lg p-4 z-10">
         <div className="flex justify-between items-center mb-3">
-          <h4 className="font-medium text-purple-100">Voters for "{option.optionName}"</h4>
+<h4 className="font-medium text-purple-100">
+  Voters for "{activeCategory?.toLowerCase() === 'date' && !isNaN(Date.parse(option.optionName)) ? formatDate(option.optionName) : option.optionName}"
+</h4>
           <button 
             onClick={() => setSelectedOption(null)}
             className="text-purple-300 hover:text-purple-100"

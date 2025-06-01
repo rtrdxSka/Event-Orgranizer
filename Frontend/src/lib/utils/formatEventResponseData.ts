@@ -1,4 +1,5 @@
 import { EventData } from "@/lib/validations/eventSubmit.schemas";
+import { VotingCategory, VotingOption } from "@/types";
 
 // Helper function to generate MongoDB-like ID
 function generateMongoId(): string {
@@ -16,53 +17,28 @@ interface CustomFieldOption {
   checked?: boolean;
 }
 
-interface CustomField {
-  id?: number;
-  type: 'text' | 'list' | 'radio' | 'checkbox';
-  title: string;
-  placeholder?: string;
-  required?: boolean;
-  readonly?: boolean;
-  optional?: boolean;
-  value?: string;
-  options?: CustomFieldOption[];
-  values?: string[];
-  maxEntries?: number;
-  allowUserAdd?: boolean;
-  maxOptions?: number;
-  allowUserAddOptions?: boolean;
-  selectedOption?: number | null;
-}
-
-// Helper function to find field by title
-function findFieldByTitle(customFields: Record<string, any>, title: string): CustomField | undefined {
-  for (const [_, field] of Object.entries(customFields)) {
-    if (field.title === title) {
-      return field as CustomField;
+type CustomFieldValue =
+  | string // for text fields
+  | string[] // for list fields
+  | {
+      // for radio fields
+      value: string;
+      userAddedOptions: string[];
     }
-  }
-  return undefined;
-}
-
-// Helper function to check if an option is user-added (not in original options)
-function isUserAddedOption(optionName: string, fieldOptions?: CustomFieldOption[]): boolean {
-  if (!fieldOptions || fieldOptions.length === 0) {
-    return true; // If no original options, consider it user-added
-  }
-  
-  // Check if this option exists in the original field options
-  return !fieldOptions.some(opt => opt.label.toLowerCase() === optionName.toLowerCase());
-}
+  | {
+      // for checkbox fields
+      userAddedOptions: string[];
+      [optionId: string]: boolean | string[]; // option IDs as keys with boolean values, plus userAddedOptions
+    };
 
 export const formatEventResponseData = (
   event: EventData,
   userId: string,
   userEmail: string,
-  userName: string | undefined,
   formData: {
     selectedDates: string[];
     selectedPlaces: string[];
-    customFields: Record<string, any>;
+    customFields: Record<string, CustomFieldValue>;
   },
   suggestedDates: string[],
   suggestedPlaces: string[]
@@ -72,13 +48,12 @@ export const formatEventResponseData = (
     eventId: event._id,
     userId,
     userEmail,
-    userName,
 
     // Start with a copy of the event's voting categories
     votingCategories: JSON.parse(JSON.stringify(event.votingCategories || [])),
     
     // For non-voting fields
-    fieldResponses: [],
+    fieldResponses: [] as Array<{ fieldId: string; type: string; response: string | string[] }>,
     
     // Store suggested dates and places for backward compatibility
     suggestedDates: Array.isArray(suggestedDates) ? suggestedDates : [],
@@ -90,19 +65,19 @@ export const formatEventResponseData = (
 
   // Process dates voting category
   const dateCategoryIndex = response.votingCategories.findIndex(
-    c => c.categoryName === "date"
+    (c: { categoryName: string; options: VotingOption[]; _id: string }) => c.categoryName === "date"
   );
 
   if (dateCategoryIndex !== -1 && Array.isArray(suggestedDates)) {
     // First, remove user's vote from all date options
-    response.votingCategories[dateCategoryIndex].options.forEach(option => {
-      option.votes = option.votes.filter(id => id !== userId);
+    response.votingCategories[dateCategoryIndex].options.forEach((option: { votes: string[]; optionName: string; _id: string }) => {
+      option.votes = option.votes.filter((id: string) => id !== userId);
     });
     
     // Add all suggested dates as options (regardless of voting)
     suggestedDates.forEach(dateStr => {
       const exists = response.votingCategories[dateCategoryIndex].options.some(
-        opt => opt.optionName === dateStr
+        (opt: VotingOption)  => opt.optionName === dateStr
       );
       
       if (!exists) {
@@ -118,7 +93,7 @@ export const formatEventResponseData = (
     // Now add votes for selected dates
     formData.selectedDates.forEach(selectedDate => {
       const optionIndex = response.votingCategories[dateCategoryIndex].options.findIndex(
-        opt => opt.optionName === selectedDate
+        (opt: VotingOption) => opt.optionName === selectedDate
       );
 
       if (optionIndex !== -1) {
@@ -133,19 +108,19 @@ export const formatEventResponseData = (
 
   // Process places voting category
   const placeCategoryIndex = response.votingCategories.findIndex(
-    c => c.categoryName === "place"
+    (c: VotingCategory) => c.categoryName === "place"
   );
 
   if (placeCategoryIndex !== -1 && Array.isArray(suggestedPlaces)) {
     // First, remove user's vote from all place options
-    response.votingCategories[placeCategoryIndex].options.forEach(option => {
-      option.votes = option.votes.filter(id => id !== userId);
+    response.votingCategories[placeCategoryIndex].options.forEach((option: VotingOption) => {
+      option.votes = option.votes.filter((id: string) => id !== userId);
     });
     
     // Add all suggested places as options (regardless of voting)
     suggestedPlaces.forEach(place => {
       const exists = response.votingCategories[placeCategoryIndex].options.some(
-        opt => opt.optionName === place
+        (opt: VotingOption) => opt.optionName === place
       );
       
       if (!exists) {
@@ -161,7 +136,7 @@ export const formatEventResponseData = (
     // Now add votes for selected places
     formData.selectedPlaces.forEach(selectedPlace => {
       const optionIndex = response.votingCategories[placeCategoryIndex].options.findIndex(
-        opt => opt.optionName === selectedPlace
+        (opt: VotingOption) => opt.optionName === selectedPlace
       );
 
       if (optionIndex !== -1) {
@@ -205,33 +180,37 @@ export const formatEventResponseData = (
             response.fieldResponses.push({
               fieldId,
               type: 'text',
-              response: fieldResponse
+              response: fieldResponse as string
             });
           }
           break;
           
-        case 'list':
-          // For list fields, include ONLY user-added values
-          const originalValues = fieldData.values || [];
-          const listValues = Array.isArray(fieldResponse) ? fieldResponse : [fieldResponse];
-          
-          // Keep only user-added values (those beyond the original values)
-          const userAddedValues = listValues.slice(originalValues.length);
-          const nonEmptyUserValues = userAddedValues.filter(val => val && val.trim() !== '');
-          
-          if (nonEmptyUserValues.length > 0) {
-            response.fieldResponses.push({
-              fieldId,
-              type: 'list',
-              response: nonEmptyUserValues
-            });
-          }
-          break;
+        case 'list': {
+  // For list fields, include ONLY user-added values
+  const originalValues = fieldData.values || [];
+  const listValues = Array.isArray(fieldResponse) ? fieldResponse : [fieldResponse];
+  
+  // Keep only user-added values (those beyond the original values)
+  const userAddedValues = listValues.slice(originalValues.length);
+  const nonEmptyUserValues = userAddedValues
+    .filter(val => val && typeof val === 'string' && val.trim() !== '')
+    .map(val => val.toString());
+  
+  if (nonEmptyUserValues.length > 0) {
+    response.fieldResponses.push({
+      fieldId,
+      type: 'list',
+      response: nonEmptyUserValues
+    });
+  }
+  break;
+}
           
 case 'radio':
+  {
   // For radio fields, find the right category by field title
   let categoryIndex = response.votingCategories.findIndex(
-    c => c.categoryName === fieldData.title || c.categoryName === fieldId
+    (c: VotingCategory) => c.categoryName === fieldData.title || c.categoryName === fieldId
   );
   
   if (categoryIndex === -1) {
@@ -246,15 +225,15 @@ case 'radio':
   }
   
   // First, clear user's vote from all options in this category
-  response.votingCategories[categoryIndex].options.forEach(option => {
-    option.votes = option.votes.filter(id => id !== userId);
+  response.votingCategories[categoryIndex].options.forEach((option: VotingOption) => {
+    option.votes = option.votes.filter((id: string) => id !== userId);
   });
   
   // Track ONLY user-added options
   const userAddedOptions: string[] = [];
   
   // Get the selected value for voting
-  const selectedValue = typeof fieldResponse === 'object' ? fieldResponse.value : fieldResponse;
+  const selectedValue = typeof fieldResponse === 'object' && fieldResponse !== null && 'value' in fieldResponse ? fieldResponse.value : fieldResponse;
   
   // Check if there's a userAddedOptions property in the response
   if (fieldResponse && typeof fieldResponse === 'object' && 'userAddedOptions' in fieldResponse) {
@@ -286,7 +265,7 @@ case 'radio':
   if (fieldData.options && fieldData.options.length > 0) {
     fieldData.options.forEach((opt: CustomFieldOption) => {
       const optionExists = response.votingCategories[categoryIndex].options.some(
-        existingOpt => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
+        (existingOpt: VotingOption) => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
       );
       
       if (!optionExists) {
@@ -304,7 +283,7 @@ case 'radio':
   if (fieldData.allowUserAddOptions && userAddedOptions.length > 0) {
     userAddedOptions.forEach(optionValue => {
       const optionExists = response.votingCategories[categoryIndex].options.some(
-        opt => opt.optionName.toLowerCase() === optionValue.toLowerCase()
+        (opt: VotingOption) => opt.optionName.toLowerCase() === optionValue.toLowerCase()
       );
       
       if (!optionExists) {
@@ -320,9 +299,9 @@ case 'radio':
   
   // Add vote if user selected this option
   if (selectedValue) {
-    const optionIndex = response.votingCategories[categoryIndex].options.findIndex(
-      opt => opt.optionName.toLowerCase() === selectedValue.toLowerCase()
-    );
+const optionIndex = response.votingCategories[categoryIndex].options.findIndex(
+  (opt: VotingOption) => opt.optionName.toLowerCase() === (typeof selectedValue === 'string' ? selectedValue.toLowerCase() : '')
+);
     
     if (optionIndex !== -1) {
       // Add user to votes array if not already there
@@ -333,11 +312,13 @@ case 'radio':
     }
   }
   break;
+}
           
         case 'checkbox':
+          {
           // For checkbox fields, find the right category by field title
           let checkboxCategoryIndex = response.votingCategories.findIndex(
-            c => c.categoryName === fieldData.title || c.categoryName === fieldId
+            (c: VotingCategory) => c.categoryName === fieldData.title || c.categoryName === fieldId
           );
           
           if (checkboxCategoryIndex === -1) {
@@ -352,8 +333,8 @@ case 'radio':
           }
           
           // First, clear all user's votes from this category
-          response.votingCategories[checkboxCategoryIndex].options.forEach(option => {
-            option.votes = option.votes.filter(id => id !== userId);
+          response.votingCategories[checkboxCategoryIndex].options.forEach((option: VotingOption) => {
+            option.votes = option.votes.filter((id: string) => id !== userId);
           });
           
           // Track ONLY user-added options
@@ -387,7 +368,7 @@ case 'radio':
           if (fieldData.options && fieldData.options.length > 0) {
             fieldData.options.forEach((opt: CustomFieldOption) => {
               const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
-                existingOpt => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
+                (existingOpt: VotingOption) => existingOpt.optionName.toLowerCase() === opt.label.toLowerCase()
               );
               
               if (!optionExists) {
@@ -406,7 +387,7 @@ case 'radio':
             userAddedCheckboxOptions.forEach(optionName => {
               // Check if this option already exists in the category
               const optionExists = response.votingCategories[checkboxCategoryIndex].options.some(
-                opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+                (opt: VotingOption) => opt.optionName.toLowerCase() === optionName.toLowerCase()
               );
               
               if (!optionExists) {
@@ -422,7 +403,7 @@ case 'radio':
           }
           
           // Get all checked options (both original and user-added)
-          const checkedOptions = [];
+          const checkedOptions: string[] = [];
           if (fieldResponse && typeof fieldResponse === 'object') {
             // Look through all properties except 'userAddedOptions'
             Object.entries(fieldResponse).forEach(([key, isChecked]) => {
@@ -441,11 +422,11 @@ case 'radio':
                 // For user-added options (with key pattern "user_something")
                 if (key.startsWith('user_')) {
                   // Get original capitalization from userAddedOptions if possible
-                  if (Array.isArray(fieldResponse.userAddedOptions)) {
-                    // Find the original option that would create this key when transformed
-                    const originalOption = fieldResponse.userAddedOptions.find(
-                      option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
-                    );
+                  if ('userAddedOptions' in fieldResponse && Array.isArray(fieldResponse.userAddedOptions)) {
+  // Find the original option that would create this key when transformed
+  const originalOption = fieldResponse.userAddedOptions.find(
+    option => `user_${option.replace(/\s+/g, '_').toLowerCase()}` === key
+  );
                     
                     if (originalOption) {
                       checkedOptions.push(originalOption); // Use with original capitalization
@@ -467,7 +448,7 @@ case 'radio':
           // Now add votes for each checked option
           checkedOptions.forEach(optionName => {
             const optionIndex = response.votingCategories[checkboxCategoryIndex].options.findIndex(
-              opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+              (opt: VotingOption) => opt.optionName.toLowerCase() === optionName.toLowerCase()
             );
             
             if (optionIndex !== -1) {
@@ -487,6 +468,7 @@ case 'radio':
             }
           });
           break;
+        }
       }
     }
   }

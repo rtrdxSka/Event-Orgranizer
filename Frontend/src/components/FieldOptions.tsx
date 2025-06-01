@@ -47,7 +47,10 @@ interface ListField extends BaseField {
 }
 
 type Field = TextField | ListField | RadioField | CheckboxField;
-type FieldSettings = Partial<Omit<Field, 'id' | 'type'>>;
+type FieldSettings = Partial<Omit<TextField, 'id' | 'type'>> & 
+  Partial<Omit<ListField, 'id' | 'type'>> & 
+  Partial<Omit<RadioField, 'id' | 'type'>> & 
+  Partial<Omit<CheckboxField, 'id' | 'type'>>;
 
 interface FieldOptionsProps {
   field: Field;

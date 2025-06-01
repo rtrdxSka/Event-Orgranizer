@@ -1,5 +1,6 @@
 // src/lib/googleCalendar.ts
 import API from '@/config/apiClient';
+import { GoogleCalendarEventResponse } from '@/types';
 
 interface CalendarEventData {
   summary: string;
@@ -25,7 +26,7 @@ export const getGoogleAuthStatus = async (): Promise<GoogleAuthStatus> => {
   return response.data;
 };
 
-export const createGoogleCalendarEvent = async (eventData: CalendarEventData): Promise<any> => {
+export const createGoogleCalendarEvent = async (eventData: CalendarEventData): Promise<GoogleCalendarEventResponse > => {
   const response = await API.post('/auth/create-event', { eventData });
   return response.data;
 };

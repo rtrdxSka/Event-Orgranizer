@@ -6,6 +6,11 @@ import { OtherUserResponsesData } from '@/types';
 
 interface PaginatedSuggestionsData extends OtherUserResponsesData {
   hasMore: boolean;
+  hasMoreByField?: {
+    dates: boolean;
+    places: boolean;
+    customFields: Record<string, boolean>;
+  };
   pagination: {
     page: number;
     limit: number;
@@ -31,10 +36,15 @@ interface UsePaginatedSuggestionsReturn {
   
   // Error states
   isError: boolean;
-  error: any;
+  error: Error | null;
   
   // Pagination
   hasMore: boolean;
+  hasMoreByField: {
+    dates: boolean;
+    places: boolean;
+    customFields: Record<string, boolean>;
+  };
   currentPage: number;
   totalLoaded: {
     dates: number;
@@ -60,6 +70,11 @@ export const usePaginatedSuggestions = ({
     customFields: {}
   });
   const [hasMore, setHasMore] = useState(true);
+  const [hasMoreByField, setHasMoreByField] = useState({
+    dates: true,
+    places: true,
+    customFields: {} as Record<string, boolean>
+  });
   const [totalLoaded, setTotalLoaded] = useState({
     dates: 0,
     places: 0,
@@ -68,77 +83,104 @@ export const usePaginatedSuggestions = ({
 
   // Query for the current page
   const { 
-  data, 
-  isLoading, 
-  isError, 
-  error,
-  isFetching 
-} = useQuery({
-  queryKey: ['otherUserSuggestions', eventId, currentPage, maxSuggestionsPerField, limitPerPage],
-  queryFn: () => getOtherUserSuggestions(eventId, {
-    page: currentPage,
-    limit: limitPerPage,
-    maxSuggestions: maxSuggestionsPerField
-  }),
-  enabled: enabled && !!eventId,
-  staleTime: 1000 * 60 * 5, // 5 minutes
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  retry: false,
-});
+    data, 
+    isLoading, 
+    isError, 
+    error,
+    isFetching 
+  } = useQuery({
+    queryKey: ['otherUserSuggestions', eventId, currentPage, maxSuggestionsPerField, limitPerPage],
+    queryFn: () => getOtherUserSuggestions(eventId, {
+      page: currentPage,
+      limit: limitPerPage,
+      maxSuggestions: maxSuggestionsPerField
+    }),
+    enabled: enabled && !!eventId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
 
-useEffect(() => {
-  if (data) {
-    const newSuggestions = data.data.uniqueSuggestions;
-    const paginationData = data.data as PaginatedSuggestionsData;
-    
-    if (currentPage === 0) {
-      // First page - replace all data
-      setAllSuggestions(newSuggestions);
-      setTotalLoaded({
-        dates: newSuggestions.dates.length,
-        places: newSuggestions.places.length,
-        customFields: Object.fromEntries(
-          Object.entries(newSuggestions.customFields).map(([key, values]) => [key, values.length])
-        )
-      });
-    } else {
-      // Additional pages - merge with existing data
-      setAllSuggestions(prev => {
-        const merged = {
-          dates: [...prev.dates, ...newSuggestions.dates].slice(0, maxSuggestionsPerField),
-          places: [...prev.places, ...newSuggestions.places].slice(0, maxSuggestionsPerField),
-          customFields: { ...prev.customFields }
-        };
-        
-        // Merge custom fields
-        Object.entries(newSuggestions.customFields).forEach(([fieldId, newValues]) => {
-          const existing = prev.customFields[fieldId] || [];
-          merged.customFields[fieldId] = [...existing, ...newValues].slice(0, maxSuggestionsPerField);
+  useEffect(() => {
+    if (data) {
+      const newSuggestions = data.data.uniqueSuggestions;
+      const paginationData = data.data as PaginatedSuggestionsData;
+      
+      if (currentPage === 0) {
+        // First page - replace all data
+        setAllSuggestions(newSuggestions);
+        setTotalLoaded({
+          dates: newSuggestions.dates.length,
+          places: newSuggestions.places.length,
+          customFields: Object.fromEntries(
+            Object.entries(newSuggestions.customFields).map(([key, values]) => [key, (values as string[]).length])
+          )
+        });
+      } else {
+        // Additional pages - merge with existing data
+        setAllSuggestions(prev => {
+          const merged = {
+            dates: [...prev.dates, ...newSuggestions.dates].slice(0, maxSuggestionsPerField),
+            places: [...prev.places, ...newSuggestions.places].slice(0, maxSuggestionsPerField),
+            customFields: { ...prev.customFields }
+          };
+          
+          // Merge custom fields
+          Object.entries(newSuggestions.customFields).forEach(([fieldId, newValues]) => {
+            const existing = prev.customFields[fieldId] || [];
+            merged.customFields[fieldId] = [...existing, ...(newValues as string[])].slice(0, maxSuggestionsPerField);
+          });
+          
+          return merged;
         });
         
-        return merged;
-      });
+        setTotalLoaded(prev => ({
+          dates: Math.min(prev.dates + newSuggestions.dates.length, maxSuggestionsPerField),
+          places: Math.min(prev.places + newSuggestions.places.length, maxSuggestionsPerField),
+          customFields: {
+            ...prev.customFields,
+            ...Object.fromEntries(
+              Object.entries(newSuggestions.customFields).map(([fieldId, newValues]) => {
+                const existingCount = prev.customFields[fieldId] || 0;
+                return [fieldId, Math.min(existingCount + (newValues as string[]).length, maxSuggestionsPerField)];
+              })
+            )
+          }
+        }));
+      }
       
-      setTotalLoaded(prev => ({
-        dates: Math.min(prev.dates + newSuggestions.dates.length, maxSuggestionsPerField),
-        places: Math.min(prev.places + newSuggestions.places.length, maxSuggestionsPerField),
-        customFields: {
-          ...prev.customFields,
-          ...Object.fromEntries(
-            Object.entries(newSuggestions.customFields).map(([fieldId, newValues]) => {
-              const existingCount = prev.customFields[fieldId] || 0;
-              return [fieldId, Math.min(existingCount + newValues.length, maxSuggestionsPerField)];
-            })
-          )
-        }
-      }));
+      // Update hasMore based on backend response
+      setHasMore(paginationData.hasMore || false);
+      
+      // Update hasMoreByField if provided by backend
+      if (paginationData.hasMoreByField) {
+        setHasMoreByField(prevHasMoreByField => ({
+          dates: paginationData.hasMoreByField!.dates,
+          places: paginationData.hasMoreByField!.places,
+          customFields: {
+            ...prevHasMoreByField.customFields,
+            ...paginationData.hasMoreByField!.customFields
+          }
+        }));
+      } else {
+        // Fallback: if no hasMoreByField from backend, derive it from the data
+        setHasMoreByField(prevHasMoreByField => ({
+          dates: newSuggestions.dates.length > 0 && (paginationData.hasMore || false),
+          places: newSuggestions.places.length > 0 && (paginationData.hasMore || false),
+          customFields: {
+            ...prevHasMoreByField.customFields,
+            ...Object.fromEntries(
+              Object.entries(newSuggestions.customFields).map(([fieldId, values]) => [
+                fieldId, 
+                (values as string[]).length > 0 && (paginationData.hasMore || false)
+              ])
+            )
+          }
+        }));
+      }
     }
-    
-    // Update hasMore based on backend response
-    setHasMore(paginationData.hasMore || false);
-  }
-}, [data, currentPage, maxSuggestionsPerField]);
+  }, [data, currentPage, maxSuggestionsPerField]);
 
   const loadMore = useCallback(() => {
     if (!isLoading && !isFetching && hasMore) {
@@ -159,6 +201,11 @@ useEffect(() => {
       customFields: {}
     });
     setHasMore(true);
+    setHasMoreByField({
+      dates: true,
+      places: true,
+      customFields: {}
+    });
   }, []);
 
   return {
@@ -172,10 +219,11 @@ useEffect(() => {
     
     // Error states
     isError,
-    error,
+    error: error as Error | null,
     
     // Pagination
     hasMore,
+    hasMoreByField,
     currentPage,
     totalLoaded,
     

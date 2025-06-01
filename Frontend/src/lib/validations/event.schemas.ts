@@ -47,6 +47,8 @@ export const radioFieldSchema = z.object({
   type: z.literal("radio"),
   options: z.array(radioOptionSchema).min(2, "Radio fields must have at least 2 options"),
   selectedOption: z.number().nullable(),
+  maxOptions: z.number().min(0).optional(),
+  allowUserAddOptions: z.boolean().default(false),
 });
 
 export type RadioField = z.infer<typeof radioFieldSchema>;
@@ -59,6 +61,8 @@ export const validateRadioField = (field: RadioField): string | true => {
       return "Read-only radio fields must have a selected option";
     }
   }
+
+  
   
   // Validate that all options have labels
   if (field.options.some(opt => !opt.label.trim())) {
@@ -74,6 +78,17 @@ export const validateRadioField = (field: RadioField): string | true => {
   if (new Set(labels).size !== labels.length) {
     return "Radio options cannot contain duplicate labels (case-insensitive)";
   }
+
+  if (field.maxOptions && field.maxOptions > 0 && field.allowUserAddOptions) {
+
+    if(field.maxOptions == 1){
+    return "Max options cannot be 1 when allowing users to add options. Set max options to 0 for unlimited or a number greater than 1";
+  }
+
+  if (field.options.length >= field.maxOptions) {
+    return `Current options (${field.options.length}) equals or exceeds max options (${field.maxOptions}). Since users can add options, increase max options to allow room for user additions`;
+  }
+}
   
   return true;
 };
@@ -89,6 +104,8 @@ export const checkboxFieldSchema = z.object({
   ...baseFieldSchema.shape,
   type: z.literal("checkbox"),
   options: z.array(checkboxOptionSchema).min(1, "Checkbox fields must have at least 1 option"),
+  maxOptions: z.number().min(0).optional(),
+  allowUserAddOptions: z.boolean().default(false),
 });
 
 export type CheckboxField = z.infer<typeof checkboxFieldSchema>;
@@ -116,6 +133,12 @@ export const validateCheckboxField = (field: CheckboxField): string | true => {
   if (new Set(labels).size !== labels.length) {
     return "Checkbox options cannot contain duplicate labels (case-insensitive)";
   }
+
+  if (field.maxOptions && field.maxOptions > 0 && field.allowUserAddOptions) {
+  if (field.options.length >= field.maxOptions) {
+    return `Current options (${field.options.length}) equals or exceeds max options (${field.maxOptions}). Since users can add options, increase max options to allow room for user additions`;
+  }
+}
   
   return true;
 };
@@ -167,10 +190,6 @@ export const validateListField = (field: ListField): string | true => {
     
     // Check if users can add entries
     if (!field.allowUserAdd) {
-      // If users can't add entries, we must provide an empty field
-      // if (!hasEmptyField) {
-      //   return "Must include an empty field for user input since users cannot add their own entries";
-      // }
       return "Non-readonly list fields must allow users to add entries"
     } else {
       // If users can add entries, either need an empty field or room for more
@@ -217,6 +236,10 @@ export const validateEventDates = (eventDates: EventDatesSchema): string | true 
   if (nonEmptyDates.length === 0) {
     return "At least one event date must be provided";
   }
+
+  if (eventDates.maxDates > 0 && eventDates.maxVotes > eventDates.maxDates) {
+  return `Max votes (${eventDates.maxVotes}) cannot be greater than max dates (${eventDates.maxDates})`;
+}
   
   const hasEmptyField = eventDates.dates.some(date => date.trim() === '');
   const hasRoomForMore = eventDates.maxDates === 0 || eventDates.dates.length < eventDates.maxDates;
@@ -245,7 +268,7 @@ export const validateEventDates = (eventDates: EventDatesSchema): string | true 
 export const eventPlaceSchema = z.object({
   places: z.array(z.string()).min(1, "At least one place for the event must be provided").refine(
     places => places.filter(place => place.trim() !== '').length > 0,
-    "At least one event date must have a value"
+    "At least one event place must have a value"
   ),
   maxPlaces: z.number().min(0, "Max dates cannot be negative"),
   allowUserAdd: z.boolean().default(true), // Default to allowing users to add dates
@@ -258,8 +281,12 @@ export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | tru
   const nonEmptyDates = eventPlaces.places.filter(place => place.trim() !== '');
   
   if (nonEmptyDates.length === 0) {
-    return "At least one event date must be provided";
+    return "At least one event place must be provided";
   }
+
+  if (eventPlaces.maxPlaces > 0 && eventPlaces.maxVotes > eventPlaces.maxPlaces) {
+  return `Max votes (${eventPlaces.maxVotes}) cannot be greater than max places (${eventPlaces.maxPlaces})`;
+}
   
   const hasEmptyField = eventPlaces.places.some(place => place.trim() === '');
   const hasRoomForMore = eventPlaces.maxPlaces === 0 || eventPlaces.places.length < eventPlaces.maxPlaces;
@@ -273,7 +300,7 @@ export const validateEventPlaces = (eventPlaces: EventPlaceSchema): string | tru
   } else {
     // If users can add dates, either need an empty field or room for more
     if (!hasEmptyField && !hasRoomForMore) {
-      return "Must either have an empty date field or room for more dates";
+      return "Must either have an empty place field or room for more places";
     }
   }
   

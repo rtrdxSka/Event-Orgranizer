@@ -18,43 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import GoogleCalendarTest from './GoogleCalendarTest';
 import { toast } from 'sonner';
+import { CustomFieldSelection, FinalizedEventData } from '@/types';
 
 // Define types for finalized event data (same as before)
-interface CustomFieldSelection {
-  fieldId: string;
-  fieldType: string;
-  fieldTitle: string;
-  selection: any;
-  voterDetails?: Array<{
-    optionName: string;
-    voters: string[];
-  }>;
-}
 
-interface FinalizedEventData {
-  event: {
-    _id: string;
-    name: string;
-    description: string;
-    eventUUID: string;
-    status: 'open' | 'closed' | 'finalized';
-    createdBy: string;
-    createdAt: string;
-  };
-  finalizedEvent: {
-    finalizedDate: string | null;
-    finalizedPlace: string | null;
-    customFieldSelections: Record<string, CustomFieldSelection>;
-    finalizedAt: string;
-    finalizedBy: string;
-  };
-  organizer: {
-    email: string;
-    name?: string;
-  };
-}
 
 const FinalizedEventView: React.FC = () => {
   const { eventUUID } = useParams<{ eventUUID: string }>();
@@ -91,7 +59,8 @@ const FinalizedEventView: React.FC = () => {
         hour: '2-digit',
         minute: '2-digit'
       });
-    } catch (e) {
+    } catch (e: unknown) {
+      console.error('Error formatting date:', e);
       return dateStr;
     }
   };
@@ -298,14 +267,14 @@ const handleAddToGoogleCalendar = () => {
                         
                         {/* Text field */}
                         {selection.fieldType === 'text' && (
-                          <p className="text-purple-200">{selection.selection}</p>
+                          <span className="text-purple-100">{selection.selection as React.ReactNode}</span>
                         )}
                         
                         {/* Radio field (single selection) */}
                         {selection.fieldType === 'radio' && (
                           <div className="flex items-center gap-2 bg-purple-700/40 p-3 rounded">
                             <CheckCircle className="h-5 w-5 text-green-400" />
-                            <span className="text-purple-100">{selection.selection}</span>
+                            <span className="text-purple-100">{selection.selection as React.ReactNode}</span>
                           </div>
                         )}
                         
@@ -322,7 +291,7 @@ const handleAddToGoogleCalendar = () => {
                             ) : (
                               <div className="flex items-center gap-2 bg-purple-700/40 p-3 rounded">
                                 <CheckCircle className="h-5 w-5 text-green-400" />
-                                <span className="text-purple-100">{selection.selection}</span>
+                                <span className="text-purple-100">{selection.selection as React.ReactNode}</span>
                               </div>
                             )}
                           </div>
@@ -339,7 +308,7 @@ const handleAddToGoogleCalendar = () => {
                               ))
                             ) : (
                               <div className="bg-purple-700/40 p-3 rounded">
-                                <p className="text-purple-100">{selection.selection}</p>
+                                <span className="text-purple-100">{selection.selection as React.ReactNode}</span>
                               </div>
                             )}
                           </div>
@@ -369,7 +338,7 @@ const handleAddToGoogleCalendar = () => {
                       <DropdownMenuLabel className="text-purple-200">Google Calendar</DropdownMenuLabel>
                       <DropdownMenuSeparator className="bg-purple-700" />
                       <DropdownMenuItem 
-                        onClick={disconnectGoogle}
+                        onClick={() => disconnectGoogle()}
                         disabled={isDisconnecting}
                         className="text-red-300 hover:text-red-200 hover:bg-red-900/30"
                       >

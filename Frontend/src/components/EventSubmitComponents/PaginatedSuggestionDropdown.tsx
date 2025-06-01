@@ -26,7 +26,6 @@ interface PaginatedSuggestionDropdownProps {
 }
 
 const PaginatedSuggestionDropdown: React.FC<PaginatedSuggestionDropdownProps> = ({
-  fieldId,
   fieldTitle,
   suggestions,
   onSelect,
@@ -63,7 +62,7 @@ const PaginatedSuggestionDropdown: React.FC<PaginatedSuggestionDropdownProps> = 
       });
       
       return `${dateFormatted} at ${timeFormatted}`;
-    } catch (error) {
+    } catch {
       return dateStr; // Return original if parsing fails
     }
   };

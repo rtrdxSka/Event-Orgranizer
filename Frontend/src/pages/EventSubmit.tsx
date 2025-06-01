@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  getEvent,
-  getOtherUserSuggestions,
-  getUserEventResponse,
-  submitEventResponse,
-} from "@/lib/api";
+import { getEvent, getUserEventResponse, submitEventResponse } from "@/lib/api";
 import {
   Loader2,
   XCircle,
@@ -26,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CustomFieldRenderer from "@/components/EventSubmitComponents/CustomFields";
 import {
+  EventData,
   eventSubmitSchema,
   validateEventSubmit,
 } from "@/lib/validations/eventSubmit.schemas";
@@ -35,6 +31,7 @@ import { formatEventResponseData } from "@/lib/utils/formatEventResponseData";
 import { navigate } from "@/lib/navigation";
 import { usePaginatedSuggestions } from "@/hooks/usePaginatedSuggestions";
 import PaginatedSuggestionDropdown from "@/components/EventSubmitComponents/PaginatedSuggestionDropdown";
+import { ApiError } from "@/types";
 
 type EventSubmitFormData = z.infer<typeof eventSubmitSchema>;
 
@@ -70,20 +67,27 @@ const EventSubmit = () => {
     staleTime: Infinity,
   });
 
+  type CustomFieldValue =
+    | string // for text fields
+    | string[] // for list fields
+    | {
+        // for radio fields
+        value: string;
+        userAddedOptions: string[];
+      }
+    | {
+        // for checkbox fields
+        userAddedOptions: string[];
+        [optionId: string]: boolean | string[]; // option IDs as keys with boolean values, plus userAddedOptions
+      };
+
   // Initialize react-hook-form
-  const {
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors },
-  } = useForm<{
+  const formMethods = useForm<{
     selectedDates: string[];
     newDate: string;
     selectedPlaces: string[];
     newPlace: string;
-    customFields: Record<string, any>;
+    customFields: Record<string, CustomFieldValue>;
   }>({
     defaultValues: {
       selectedDates: [],
@@ -93,6 +97,8 @@ const EventSubmit = () => {
       customFields: {},
     },
   });
+
+  const { control, handleSubmit, watch, setValue } = formMethods;
 
   // Watch form values
   const selectedDates = watch("selectedDates");
@@ -112,32 +118,40 @@ const EventSubmit = () => {
     error: userResponseError,
   } = useQuery({
     queryKey: ["userEventResponse", event?._id],
-    queryFn: () => getUserEventResponse(event?._id),
+    queryFn: () => getUserEventResponse(event!._id),
     enabled: !!event?._id && !!user,
-    onSuccess: (data) => {
-      console.log("User response data:", data);
-    },
-    onError: (error) => {
-      console.error("Error fetching user response:", error);
+  });
+
+  // Replace onSuccess with useEffect
+  useEffect(() => {
+    if (userResponse) {
+      console.log("User response data:", userResponse);
+    }
+  }, [userResponse]);
+
+  // Replace onError with useEffect
+  useEffect(() => {
+    if (isErrorUserResponse && userResponseError) {
+      console.error("Error fetching user response:", userResponseError);
       // Only show toast for real errors, not 404s which are expected when there's no response
-      if (error.status !== 404) {
+      if ((userResponseError as ApiError).status !== 404) {
         toast.error("Failed to load your previous response");
       }
-    },
-  });
+    }
+  }, [isErrorUserResponse, userResponseError]);
 
 const {
   suggestions: paginatedSuggestions,
   isLoading: isLoadingOtherSuggestions,
   isLoadingMore,
-  hasMore,
+  hasMoreByField,
   totalLoaded,
   loadMore,
 } = usePaginatedSuggestions({
-  eventId: event?._id || '',
+  eventId: event?._id || "",
   enabled: !!event?._id && !!user && !isLoading && !isLoadingUserResponse,
   maxSuggestionsPerField: 100,
-  limitPerPage: 20
+  limitPerPage: 1,
 });
 
   // Populate the form with the user's previous response
@@ -173,7 +187,7 @@ const {
       }
 
       // Initialize customFieldsData object
-      const customFieldsData = {};
+      const customFieldsData: Record<string, CustomFieldValue> = {};
 
       // Handle custom fields responses
       if (fieldResponses && fieldResponses.length > 0) {
@@ -224,15 +238,20 @@ const {
             }
           } else if (field.type === "checkbox") {
             // For checkbox fields, create a map of option ID -> true/false
-            const checkboxData = {
+            const checkboxData: {
+              userAddedOptions: string[];
+              [key: string]: boolean | string[];
+            } = {
               userAddedOptions: userOptions,
             };
 
             // Set original options
-            field.options?.forEach((option) => {
-              const isChecked = votes.includes(option.label);
-              checkboxData[option.id.toString()] = isChecked;
-            });
+            field.options?.forEach(
+              (option: { id: number; label: string; checked?: boolean }) => {
+                const isChecked = votes.includes(option.label);
+                checkboxData[option.id.toString()] = isChecked;
+              }
+            );
 
             // Set user-added options
             // Generate stable IDs for user-added options
@@ -264,25 +283,33 @@ const {
             // Initialize radio fields with an empty structure
             customFieldsData[fieldId] = {
               value: field.selectedOption
-                ? field.options?.find((o) => o.id === field.selectedOption)
-                    ?.label || ""
+                ? field.options?.find(
+                    (o: { id: number; label: string; checked?: boolean }) =>
+                      o.id === field.selectedOption
+                  )?.label || ""
                 : "",
               userAddedOptions: [],
             };
             break;
 
-          case "checkbox":
+          case "checkbox": {
             // Initialize checkbox fields with default checked states
-            const checkboxData = {
+            const checkboxData: {
+              userAddedOptions: string[];
+              [key: string]: boolean | string[];
+            } = {
               userAddedOptions: [],
             };
 
-            field.options?.forEach((option) => {
-              checkboxData[option.id.toString()] = option.checked || false;
-            });
+            field.options?.forEach(
+              (option: { id: number; label: string; checked?: boolean }) => {
+                checkboxData[option.id.toString()] = option.checked || false;
+              }
+            );
 
             customFieldsData[fieldId] = checkboxData;
             break;
+          }
 
           case "list":
             // Initialize list fields with their original values
@@ -454,13 +481,7 @@ const {
   };
 
   // Handle form submission
-  const {
-    mutate: submitResponse,
-    isPending,
-    isSuccess,
-    isError,
-    error: submitError,
-  } = useMutation({
+  const { mutate: submitResponse, isPending } = useMutation({
     mutationFn: submitEventResponse,
     onSuccess: (data) => {
       toast.success("Your responses have been submitted successfully!");
@@ -480,7 +501,7 @@ const {
     newDate: string;
     selectedPlaces: string[];
     newPlace: string;
-    customFields: Record<string, any>;
+    customFields: Record<string, CustomFieldValue>;
   }) => {
     if (!event) return;
 
@@ -521,10 +542,12 @@ const {
 
     // If validation passes, format the response data
     const responseData = formatEventResponseData(
-      event,
-      user._id,
-      user.email,
-      user.name,
+      {
+        ...event,
+        customFields: event.customFields || {},
+      } as EventData,
+      user!._id,
+      user!.email,
       {
         selectedDates: formData.selectedDates,
         selectedPlaces: formData.selectedPlaces,
@@ -535,11 +558,12 @@ const {
     );
 
     // Process the custom fields to remove read-only fields and extract only user-added entries for lists
-    const processedCustomFields = {};
+    const processedCustomFields: Record<string, CustomFieldValue> = {};
 
     if (event.customFields) {
+      const customFields = event.customFields;
       Object.entries(formData.customFields).forEach(([fieldId, fieldValue]) => {
-        const fieldDef = event.customFields[fieldId];
+        const fieldDef = customFields[fieldId];
 
         // Skip read-only fields entirely
         if (fieldDef?.readonly) {
@@ -992,31 +1016,49 @@ const {
                       )}
 
                       {/* Other users' suggested dates */}
-                 {!isLoadingOtherSuggestions && paginatedSuggestions?.dates && paginatedSuggestions.dates.length > 0 && (
-  <div className="mt-4 pt-4 border-t border-purple-600/30">
-    <PaginatedSuggestionDropdown
-      fieldId="date"
-      fieldTitle="Event Date"
-      suggestions={paginatedSuggestions.dates}
-      onSelect={(dateStr) => {
-        if (
-          event?.eventDates?.allowUserAdd &&
-          !event.eventDates.dates.includes(dateStr) &&
-          !suggestedDates.includes(dateStr)
-        ) {
-          setSuggestedDates([...suggestedDates, dateStr]);
-          setValidationError(null);
-        }
-      }}
-      type="date"
-      hasMore={hasMore}
-      isLoadingMore={isLoadingMore}
-      onLoadMore={loadMore}
-      totalLoaded={totalLoaded.dates}
-      maxSuggestions={100}
-    />
-  </div>
-)}
+                      {!isLoadingOtherSuggestions &&
+                        paginatedSuggestions?.dates &&
+                        paginatedSuggestions.dates.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-purple-600/30">
+                            <PaginatedSuggestionDropdown
+                              fieldId="date"
+                              fieldTitle="Event Date"
+                              suggestions={paginatedSuggestions.dates}
+                              onSelect={(dateStr) => {
+                                if (
+                                  event?.eventDates?.allowUserAdd &&
+                                  !event.eventDates.dates.includes(dateStr) &&
+                                  !suggestedDates.includes(dateStr)
+                                ) {
+                                  // Add max limit validation
+                                  if (
+                                    event.eventDates.maxDates > 0 &&
+                                    event.eventDates.dates.length +
+                                      suggestedDates.length >=
+                                      event.eventDates.maxDates
+                                  ) {
+                                    toast.error(
+                                      `Too many dates. Maximum allowed is ${event.eventDates.maxDates}`
+                                    );
+                                    return;
+                                  }
+
+                                  setSuggestedDates([
+                                    ...suggestedDates,
+                                    dateStr,
+                                  ]);
+                                  setValidationError(null);
+                                }
+                              }}
+                              type="date"
+                              hasMore={hasMoreByField.dates}
+                              isLoadingMore={isLoadingMore}
+                              onLoadMore={loadMore}
+                              totalLoaded={totalLoaded.dates}
+                              maxSuggestions={100}
+                            />
+                          </div>
+                        )}
 
                       {/* Voting information */}
                       <div className="mt-4 bg-purple-800/30 p-3 rounded">
@@ -1197,31 +1239,49 @@ const {
                       )}
 
                       {/* Other users' suggested places */}
-                      {!isLoadingOtherSuggestions && paginatedSuggestions?.places && paginatedSuggestions.places.length > 0 && (
-  <div className="mt-4 pt-4 border-t border-purple-600/30">
-    <PaginatedSuggestionDropdown
-      fieldId="place"
-      fieldTitle="Event Place"
-      suggestions={paginatedSuggestions.places}
-      onSelect={(place) => {
-        if (
-          event?.eventPlaces?.allowUserAdd &&
-          !event.eventPlaces.places.includes(place) &&
-          !suggestedPlaces.includes(place)
-        ) {
-          setSuggestedPlaces([...suggestedPlaces, place]);
-          setValidationError(null);
-        }
-      }}
-      type="place"
-      hasMore={hasMore}
-      isLoadingMore={isLoadingMore}
-      onLoadMore={loadMore}
-      totalLoaded={totalLoaded.places}
-      maxSuggestions={100}
-    />
-  </div>
-)}
+                      {!isLoadingOtherSuggestions &&
+                        paginatedSuggestions?.places &&
+                        paginatedSuggestions.places.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-purple-600/30">
+                            <PaginatedSuggestionDropdown
+                              fieldId="place"
+                              fieldTitle="Event Place"
+                              suggestions={paginatedSuggestions.places}
+                              onSelect={(place) => {
+                                if (
+                                  event?.eventPlaces?.allowUserAdd &&
+                                  !event.eventPlaces.places.includes(place) &&
+                                  !suggestedPlaces.includes(place)
+                                ) {
+                                  // Add max limit validation
+                                  if (
+                                    event.eventPlaces.maxPlaces > 0 &&
+                                    event.eventPlaces.places.length +
+                                      suggestedPlaces.length >=
+                                      event.eventPlaces.maxPlaces
+                                  ) {
+                                    toast.error(
+                                      `Too many places. Maximum allowed is ${event.eventPlaces.maxPlaces}`
+                                    );
+                                    return;
+                                  }
+
+                                  setSuggestedPlaces([
+                                    ...suggestedPlaces,
+                                    place,
+                                  ]);
+                                  setValidationError(null);
+                                }
+                              }}
+                              type="place"
+                              hasMore={hasMoreByField.places}
+                              isLoadingMore={isLoadingMore}
+                              onLoadMore={loadMore}
+                              totalLoaded={totalLoaded.places}
+                              maxSuggestions={100}
+                            />
+                          </div>
+                        )}
 
                       {/* Voting information */}
                       <div className="mt-4 bg-purple-800/30 p-3 rounded">
@@ -1236,45 +1296,48 @@ const {
               </div>
 
               {/* Custom Fields Section */}
-              {event.customFields &&
-                Object.keys(event.customFields).length > 0 && (
-                  <div className="bg-purple-800/30 rounded-lg p-6 mt-6">
-                    <div className="flex items-center mb-2">
-                      <AlignLeft className="h-5 w-5 text-purple-300 mr-2" />
-                      <h2 className="text-xl font-semibold text-purple-100">
-                        Additional Information
-                      </h2>
-                    </div>
-                    <div className="bg-purple-700/30 rounded-md p-4 border border-purple-600/50">
-                      <div className="space-y-6">
-                        {/* Render each custom field */}
-                        {Object.entries(event.customFields).map(
-                          ([fieldKey, fieldData]) => {
-                            // Get suggestions for this specific field if available
-                          
-                            return (
-                             <CustomFieldRenderer
-  key={fieldKey}
-  field={{
-    ...fieldData,
-    id: fieldKey,
-  }}
-  formMethods={{
-    control,
-    watch,
-    setValue,
-    handleSubmit,
-    formState: { errors },
-  }}
-  suggestions={paginatedSuggestions?.customFields?.[fieldKey] || []}
-/>
-                            );
-                          }
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+{/* Custom Fields Section */}
+{event.customFields &&
+  Object.keys(event.customFields).length > 0 && (
+    <div className="bg-purple-800/30 rounded-lg p-6 mt-6">
+      <div className="flex items-center mb-2">
+        <AlignLeft className="h-5 w-5 text-purple-300 mr-2" />
+        <h2 className="text-xl font-semibold text-purple-100">
+          Additional Information
+        </h2>
+      </div>
+      <div className="bg-purple-700/30 rounded-md p-4 border border-purple-600/50">
+        <div className="space-y-6">
+          {/* Render each custom field */}
+          {Object.entries(event.customFields).map(
+  ([fieldKey, fieldData]) => {
+    const fieldSuggestions = paginatedSuggestions?.customFields?.[fieldKey] || [];
+    const fieldTotalLoaded = totalLoaded.customFields[fieldKey] || 0;
+    const fieldHasMore = hasMoreByField.customFields[fieldKey] || false;
+    
+    return (
+      <CustomFieldRenderer
+        key={fieldKey}
+        field={{
+          ...fieldData,
+          id: fieldKey,
+          allowUserAddOptions: fieldData.allowUserAddOptions ?? false,
+        }}
+        formMethods={formMethods as never}
+        suggestions={fieldSuggestions}
+        hasMore={fieldHasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={loadMore}
+        totalLoaded={fieldTotalLoaded}
+        maxSuggestions={100}
+      />
+    );
+  }
+)}
+        </div>
+      </div>
+    </div>
+  )}
 
               {/* Display validation errors */}
               {validationError && (

@@ -1,3 +1,4 @@
+import { FieldType } from '@/types';
 import { z } from 'zod';
 
 // Define types for finalization selections
@@ -7,13 +8,52 @@ export interface FinalizeSelections {
   textSelections: Record<string, string>;
 }
 
+interface EventForValidation {
+  votingCategories?: Array<{
+    categoryName: string;
+    options?: Array<{
+      optionName: string;
+      votes: string[];
+      _id: string;
+    }>;
+    _id?: string;
+  }>;
+  customFields?: Record<string, {
+    type: FieldType;
+    title: string;
+    required: boolean;
+    maxEntries?: number;
+    values?: string[];
+  }>;
+  textFieldsData?: Array<{
+    fieldId: string;
+    categoryName: string;
+    responses: Array<{
+      userId: string;
+      userEmail: string;
+      userName?: string;
+      response: string;
+    }>;
+  }>;
+}
+
+type VotingCategory = {
+  categoryName: string;
+  options?: Array<{
+    optionName: string;
+    votes: string[];
+    _id: string;
+  }>;
+  _id?: string;
+};
+
 // Define the schema for validating finalization data
-export const createFinalizeValidationSchema = (event: any) => {
+export const createFinalizeValidationSchema = (event: EventForValidation): z.ZodObject<Record<string, z.ZodTypeAny>> | { error: string } => {
   // Create a schema object to hold all field validations
-  const schemaFields: Record<string, any> = {};
+  const schemaFields: Record<string, z.ZodTypeAny> = {};
   
   // First, process date category if it exists
-  const dateCategory = event.votingCategories?.find((cat: any) => 
+  const dateCategory = event.votingCategories?.find((cat: VotingCategory) => 
     cat.categoryName.toLowerCase() === 'date'
   );
   
@@ -24,7 +64,7 @@ export const createFinalizeValidationSchema = (event: any) => {
   }
   
   // Process place category if it exists
-  const placeCategory = event.votingCategories?.find((cat: any) => 
+  const placeCategory = event.votingCategories?.find((cat: VotingCategory) => 
     cat.categoryName.toLowerCase() === 'place'
   );
   
@@ -69,17 +109,17 @@ export const createFinalizeValidationSchema = (event: any) => {
           });
           break;
           
-        case 'list':
-          // For list fields, the number of selections should match maxEntries if specified
-          if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
-  return `Cannot exceed ${field.maxEntries} entries`;
-}else {
-            // If maxEntries is not specified, require at least one selection
-            schemaFields[fieldId] = z.array(z.string()).min(1, {
-              message: `Please select at least one option for "${field.title}"`
-            });
-          }
-          break;
+case 'list':
+  // For list fields, the number of selections should match maxEntries if specified
+if (field.maxEntries && field.maxEntries > 0 && field.values && field.values.length > field.maxEntries) {
+      return { error: `Cannot exceed ${field.maxEntries} entries` };
+    } else {
+      // If maxEntries is not specified, require at least one selection
+      schemaFields[fieldId] = z.array(z.string()).min(1, {
+        message: `Please select at least one option for "${field.title}"`
+      });
+    }
+  break;
       }
     }
   }
@@ -91,7 +131,7 @@ export const createFinalizeValidationSchema = (event: any) => {
 // Function to validate the finalization data
 export const validateFinalizations = (
   finalizeSelections: FinalizeSelections,
-  event: any
+  event: EventForValidation
 ) => {
   if (!event) return { success: false, message: "Event data is missing" };
   
@@ -100,25 +140,35 @@ export const validateFinalizations = (
   
   // Create the validation schema
   const validationSchema = createFinalizeValidationSchema(event);
+
+    if ('error' in validationSchema) {
+    return { success: false, message: validationSchema.error };
+  }
   
   // Validate the data
   const validationResult = validationSchema.safeParse(finalizeData);
   
-  if (!validationResult.success) {
-    // Extract the first error message
-    const formattedError = validationResult.error.format();
-    
-    // Find the first error message
-    let firstErrorMessage = "Validation failed";
-    for (const key in formattedError) {
-      if (key !== '_errors' && formattedError[key]?._errors?.length > 0) {
-        firstErrorMessage = formattedError[key]._errors[0];
-        break;
+if (!validationResult.success) {
+  // Extract the first error message
+  const formattedError = validationResult.error.format();
+  
+  // Find the first error message
+  let firstErrorMessage = "Validation failed";
+  for (const key in formattedError) {
+    if (key !== '_errors') {
+      const fieldError = formattedError[key as keyof typeof formattedError];
+      if (fieldError && typeof fieldError === 'object' && '_errors' in fieldError) {
+        const errors = (fieldError as { _errors: string[] })._errors;
+        if (errors && errors.length > 0) {
+          firstErrorMessage = errors[0];
+          break;
+        }
       }
     }
-    
-    return { success: false, message: firstErrorMessage };
   }
+  
+  return { success: false, message: firstErrorMessage };
+}
   
   return { success: true };
 };
@@ -126,12 +176,12 @@ export const validateFinalizations = (
 // Helper function to prepare finalization data from selections
 const prepareFinalizeData = (
   finalizeSelections: FinalizeSelections,
-  event: any
+  event: EventForValidation
 ) => {
   const { categorySelections, listSelections, textSelections } = finalizeSelections;
   
   // Initialize the data structure
-  const finalizeData: Record<string, any> = {};
+  const finalizeData: Record<string, string | string[]> = {};
   
   // Extract date selection
   const dateSelection = getFinalDateSelection(categorySelections);
@@ -147,7 +197,7 @@ const prepareFinalizeData = (
   
   // Process voting categories (radio & checkbox fields)
   if (event.votingCategories) {
-    event.votingCategories.forEach((category: any) => {
+    event.votingCategories.forEach((category: VotingCategory) => {
       // Skip date and place categories
       if (category.categoryName.toLowerCase() === 'date' || 
           category.categoryName.toLowerCase() === 'place') {
@@ -176,10 +226,10 @@ const prepareFinalizeData = (
       }
       
       // Store the selection(s)
-      if (selections.length === 1 && event.customFields[fieldId].type === 'radio') {
+      if (selections.length === 1 && event.customFields?.[fieldId].type === 'radio') {
         // For radio fields, store a single value
         finalizeData[fieldId] = selections[0];
-      } else if (selections.length > 0 && event.customFields[fieldId].type === 'checkbox') {
+      } else if (selections.length > 0 && event.customFields?.[fieldId].type === 'checkbox') {
         // For checkbox fields, store an array of values
         finalizeData[fieldId] = selections;
       }
@@ -230,7 +280,7 @@ const prepareFinalizeData = (
 // Add function to check for empty optional fields
 export const checkEmptyOptionalFields = (
   finalizeSelections: FinalizeSelections,
-  event: any
+  event: EventForValidation
 ): { hasEmptyOptionals: boolean; emptyFields: string[] } => {
   if (!event || !event.customFields) {
     return { hasEmptyOptionals: false, emptyFields: [] };

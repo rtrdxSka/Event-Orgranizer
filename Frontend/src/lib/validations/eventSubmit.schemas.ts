@@ -206,11 +206,11 @@ else if (fieldDefinition.type === 'radio') {
       
       // Validate all selected options exist in original options
       for (const [optionId, isChecked] of Object.entries(fieldValue || {})) {
-        if (isChecked) {
+        if (optionId !== 'userAddedOptions' && isChecked === true) {
           // Find option in the original field definition
-          const optionExists = fieldDefinition.options?.some(
-            o => o.id.toString() === optionId
-          );
+            const optionExists: boolean = fieldDefinition.options?.some(
+            (o: { id: number }) => o.id.toString() === optionId
+            );
           
           if (!optionExists && !fieldDefinition.allowUserAddOptions) {
             return `Selected invalid option for "${fieldDefinition.title}"`;

@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import queryClient from './queryClient';
 import { navigate } from '@/lib/navigation';
 
@@ -14,10 +14,10 @@ interface APIError {
     status: number;
     data: {
       errorCode?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     };
   };
-  config: any;
+  config: AxiosRequestConfig;
 }
 
 // Add a flag to track token validity
@@ -39,7 +39,7 @@ API.interceptors.response.use(
         isTokenValid = true;
         // Retry the original request
         return API(config);
-      } catch (error) {
+      } catch  {
         queryClient.clear();
         navigate("/login", {
           state: {

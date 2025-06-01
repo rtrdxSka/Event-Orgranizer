@@ -4,17 +4,20 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import Navbar from "@/components/NavBar";
 import { eventFormSchema, validateForm } from "@/lib/validations/event.schemas";
-import { 
-  Field, 
-  FieldSettings, 
-  FieldType, 
-  FIELD_TYPES, 
-  EventFormData, 
-  initialFormData, 
+import {
+  Field,
+  FieldSettings,
+  FieldType,
+  FIELD_TYPES,
+  EventFormData,
+  initialFormData,
   ListField,
   RadioField,
   CheckboxField,
-  TextField
+  TextField,
+  CheckboxFieldSettings,
+  CustomFieldData,
+  CreateEventPayload,
 } from "@/types";
 
 import FormFieldDropZone from "@/components/EventComponents/FormFieldDropZone";
@@ -30,7 +33,10 @@ const CreateEventForm = () => {
   const [formFields, setFormFields] = useState<Field[]>([]);
   const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [createdEventData, setCreatedEventData] = useState<{ uuid: string; name: string }>({ uuid: '', name: '' });
+  const [createdEventData, setCreatedEventData] = useState<{
+    uuid: string;
+    name: string;
+  }>({ uuid: "", name: "" });
 
   // Event form field handlers
   const handleInputChange = (
@@ -63,85 +69,83 @@ const CreateEventForm = () => {
     }));
   };
 
-  const handleAllowUserAddChange = (fieldName: string) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ): void => {
-    if (fieldName === "eventDates") {
-      setFormData((prev) => ({
-        ...prev,
-        eventDates: {
-          ...prev.eventDates,
-          allowUserAdd: e.target.checked,
-        },
-      }));
-    } else if (fieldName === "place") {
-      setFormData((prev) => ({
-        ...prev,
-        place: {
-          ...prev.place,
-          allowUserAdd: e.target.checked,
-        },
-      }));
-    }
-  };
-
-  const handleMaxValuesChange = (fieldName: string) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ): void => {
-    const maxValue = parseInt(e.target.value) || 0;
-
-    
-    
-    if (fieldName === "eventDates") {
-       // Handle which property to update based on the input name
-    const isMaxVotes = e.target.name === "maxVotes";
-    const propertyName = isMaxVotes ? "maxVotes" : "maxDates";
-    
-    // Ensure maxVotes is at least 1
-    const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
-    
-    setFormData((prev) => {
-      // Only adjust dates if we're changing maxDates
-      let newDates = [...prev.eventDates.dates];
-      if (!isMaxVotes && validValue > 0 && newDates.length > validValue) {
-        newDates = newDates.slice(0, validValue);
+  const handleAllowUserAddChange =
+    (fieldName: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>): void => {
+      if (fieldName === "eventDates") {
+        setFormData((prev) => ({
+          ...prev,
+          eventDates: {
+            ...prev.eventDates,
+            allowUserAdd: e.target.checked,
+          },
+        }));
+      } else if (fieldName === "place") {
+        setFormData((prev) => ({
+          ...prev,
+          place: {
+            ...prev.place,
+            allowUserAdd: e.target.checked,
+          },
+        }));
       }
+    };
 
-      return {
-        ...prev,
-        eventDates: {
-          ...prev.eventDates,
-          [propertyName]: validValue,
-          dates: isMaxVotes ? prev.eventDates.dates : newDates,
-        },
-      };
-    });
-    } else if (fieldName === "place") {
-      // Handle which property to update based on the input name
-    const isMaxVotes = e.target.name === "maxVotes";
-    const propertyName = isMaxVotes ? "maxVotes" : "maxPlaces";
-    
-    // Ensure maxVotes is at least 1
-    const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
-    
-    setFormData((prev) => {
-      // Only adjust places if we're changing maxPlaces
-      let newPlaces = [...prev.place.places];
-      if (!isMaxVotes && validValue > 0 && newPlaces.length > validValue) {
-        newPlaces = newPlaces.slice(0, validValue);
+  const handleMaxValuesChange =
+    (fieldName: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>): void => {
+      const maxValue = parseInt(e.target.value) || 0;
+
+      if (fieldName === "eventDates") {
+        // Handle which property to update based on the input name
+        const isMaxVotes = e.target.name === "maxVotes";
+        const propertyName = isMaxVotes ? "maxVotes" : "maxDates";
+
+        // Ensure maxVotes is at least 1
+        const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
+
+        setFormData((prev) => {
+          // Only adjust dates if we're changing maxDates
+          let newDates = [...prev.eventDates.dates];
+          if (!isMaxVotes && validValue > 0 && newDates.length > validValue) {
+            newDates = newDates.slice(0, validValue);
+          }
+
+          return {
+            ...prev,
+            eventDates: {
+              ...prev.eventDates,
+              [propertyName]: validValue,
+              dates: isMaxVotes ? prev.eventDates.dates : newDates,
+            },
+          };
+        });
+      } else if (fieldName === "place") {
+        // Handle which property to update based on the input name
+        const isMaxVotes = e.target.name === "maxVotes";
+        const propertyName = isMaxVotes ? "maxVotes" : "maxPlaces";
+
+        // Ensure maxVotes is at least 1
+        const validValue = isMaxVotes ? Math.max(1, maxValue) : maxValue;
+
+        setFormData((prev) => {
+          // Only adjust places if we're changing maxPlaces
+          let newPlaces = [...prev.place.places];
+          if (!isMaxVotes && validValue > 0 && newPlaces.length > validValue) {
+            newPlaces = newPlaces.slice(0, validValue);
+          }
+
+          return {
+            ...prev,
+            place: {
+              ...prev.place,
+              [propertyName]: validValue,
+              places: isMaxVotes ? prev.place.places : newPlaces,
+            },
+          };
+        });
       }
-
-      return {
-        ...prev,
-        place: {
-          ...prev.place,
-          [propertyName]: validValue,
-          places: isMaxVotes ? prev.place.places : newPlaces,
-        },
-      };
-    });
-    }
-  };
+    };
 
   // Custom field handlers
   const handleFieldDrop = (fieldType: FieldType): void => {
@@ -220,11 +224,37 @@ const CreateEventForm = () => {
     );
   };
 
+  //remember this was changed
   const updateFieldSettings = (id: number, settings: FieldSettings): void => {
     setFormFields(
-      formFields.map((field) =>
-        field.id === id ? { ...field, ...settings } : field
-      )
+      formFields.map((field) => {
+        if (field.id !== id) return field;
+
+        // Type-safe spreading that preserves field structure
+        const updatedField = { ...field, ...settings } as Field;
+
+        // Special handling for checkbox fields to ensure options maintain required structure
+        if (
+          field.type === "checkbox" &&
+          "options" in settings &&
+          settings.options
+        ) {
+          const checkboxField = field as CheckboxField;
+          const checkboxSettings = settings as CheckboxFieldSettings;
+
+          return {
+            ...checkboxField,
+            ...checkboxSettings,
+            options:
+              checkboxSettings.options?.map((option) => ({
+                ...option,
+                checked: option.checked ?? false, // Ensure checked property exists
+              })) ?? checkboxField.options,
+          } as CheckboxField;
+        }
+
+        return updatedField;
+      })
     );
   };
 
@@ -237,7 +267,7 @@ const CreateEventForm = () => {
   };
 
   // Form submission
-  const handleSubmit = async  (e: React.FormEvent): Promise<void> => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
     try {
@@ -257,7 +287,7 @@ const CreateEventForm = () => {
           maxVotes: formData.place.maxVotes,
         },
         formFields: formFields,
-        closesBy: formData.closesBy
+        closesBy: formData.closesBy,
       };
 
       // First validate the structure with Zod
@@ -301,39 +331,43 @@ const CreateEventForm = () => {
         {
           categoryName: "place",
           options: placeOptions,
-        }
+        },
       ];
 
       // Create a properly structured customFields object
-      const customFields: Record<string, any> = {};
-      
-      formFields.forEach(field => {
+      const customFields: Record<string, CustomFieldData> = {};
+
+      formFields.forEach((field) => {
         // Use a unique key for each field (using title as the key)
         const fieldKey = `field_${field.id}`;
-        
+
         // Start with common properties for all field types
-        const fieldData: Record<string, any> = {
-          id: field.id,
-          type: field.type,
-          title: field.title,
-          placeholder: field.placeholder,
-          required: field.required
-        };
-        
+        const fieldData: CustomFieldData = {
+  id: field.id,
+  type: field.type,
+  title: field.title,
+  placeholder: field.placeholder,
+  required: field.required,
+  value: "", // Always provide a default value
+  readonly: false // Always provide a default value
+};
+
         // Add type-specific properties
         switch (field.type) {
-          case 'text': {
+          case "text": {
             const textField = field as TextField;
-            fieldData.value = textField.value;
+            fieldData.value = textField.value || "";
             fieldData.readonly = textField.readonly;
             // Add optional property (derived from !required && !readonly)
             fieldData.optional = !textField.required && !textField.readonly;
             break;
           }
-          
-          case 'list': {
+
+          case "list": {
             const listField = field as ListField;
-            fieldData.values = listField.values.filter(value => value.trim() !== "");
+            fieldData.values = listField.values.filter(
+              (value) => value.trim() !== ""
+            );
             fieldData.maxEntries = listField.maxEntries;
             fieldData.allowUserAdd = listField.allowUserAdd;
             fieldData.readonly = listField.readonly;
@@ -341,63 +375,62 @@ const CreateEventForm = () => {
             fieldData.optional = !listField.required && !listField.readonly;
             break;
           }
-          
-          case 'radio': {
+
+          case "radio": {
             const radioField = field as RadioField;
-            fieldData.options = radioField.options.map(opt => ({
+            fieldData.options = radioField.options.map((opt) => ({
               id: opt.id,
-              label: opt.label
+              label: opt.label,
             }));
 
             fieldData.maxOptions = radioField.maxOptions;
             fieldData.allowUserAddOptions = radioField.allowUserAddOptions;
-            
+
             // Add optional property (derived from !required)
             fieldData.optional = !radioField.required;
 
             votingCategories.push({
               categoryName: field.title,
-              options: fieldData.options.map(option => ({
+              options: fieldData.options.map((option) => ({
                 optionName: option.label,
                 votes: [],
-              }))
+              })),
             });
 
             break;
           }
-          
-          case 'checkbox': {
+
+          case "checkbox": {
             const checkboxField = field as CheckboxField;
-            fieldData.options = checkboxField.options.map(opt => ({
+            fieldData.options = checkboxField.options.map((opt) => ({
               id: opt.id,
               label: opt.label,
             }));
-            
-              
+
             fieldData.maxOptions = checkboxField.maxOptions;
             fieldData.allowUserAddOptions = checkboxField.allowUserAddOptions;
-            
+
             // Add optional property (derived from !required)
             fieldData.optional = !checkboxField.required;
 
             votingCategories.push({
               categoryName: field.title,
-              options: fieldData.options.map(option => ({
+              options: fieldData.options.map((option) => ({
                 optionName: option.label,
                 votes: [],
-              }))
+              })),
             });
-            
+
             break;
           }
         }
-        
+
         // Add the field data to the customFields object
         customFields[fieldKey] = fieldData;
       });
 
       // Create the event data with the updated structure
-      const eventData = {
+      const eventData: CreateEventPayload = {
         name: formData.name,
         description: formData.description,
         customFields,
@@ -415,57 +448,64 @@ const CreateEventForm = () => {
         },
         votingCategories,
         closesBy: new Date(formData.closesBy).toISOString(),
-      };
+      } as CreateEventPayload;
 
       // Submit the form
       console.log("Event Data:", eventData);
       const response = await createEvent(eventData);
       console.log(response);
 
-      const eventUUID = response.data.event.eventUUID;
+      const eventUUID = (response.data.event as typeof response.data.event & { eventUUID: string }).eventUUID;
 
       setCreatedEventData({
         uuid: eventUUID,
-        name: formData.name
+        name: formData.name,
       });
 
       setShowSuccessModal(true);
 
-
-      toast.custom(() => (
-        <div className="bg-white text-green-800 font-medium p-4 rounded-md shadow-lg border-l-4 border-green-600">
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <h3 className="font-bold text-base">Event created successfully!</h3>
-              <p className="text-sm text-gray-800 mt-1">
-                Your event has been created and is now ready to share.
-              </p>
+      toast.custom(
+        () => (
+          <div className="bg-white text-green-800 font-medium p-4 rounded-md shadow-lg border-l-4 border-green-600">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <h3 className="font-bold text-base">
+                  Event created successfully!
+                </h3>
+                <p className="text-sm text-gray-800 mt-1">
+                  Your event has been created and is now ready to share.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      ), {
-        duration: 5000,
-        id: 'success-toast',
-      });
+        ),
+        {
+          duration: 5000,
+          id: "success-toast",
+        }
+      );
       // await submitEvent(eventData);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
 
       console.error("Form submission error:", errorMessage);
-      toast.custom(() => (
-        <div className="bg-white text-red-900 font-medium p-4 rounded-md shadow-lg border-l-4 border-red-600">
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <h3 className="font-bold text-base">Error creating event</h3>
-              <p className="text-sm text-gray-800 mt-1">{errorMessage}</p>
+      toast.custom(
+        () => (
+          <div className="bg-white text-red-900 font-medium p-4 rounded-md shadow-lg border-l-4 border-red-600">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <h3 className="font-bold text-base">Error creating event</h3>
+                <p className="text-sm text-gray-800 mt-1">{errorMessage}</p>
+              </div>
             </div>
           </div>
-        </div>
-      ), {
-        duration: 5000,
-        id: 'error-toast',
-      });
+        ),
+        {
+          duration: 5000,
+          id: "error-toast",
+        }
+      );
     }
   };
 
@@ -511,16 +551,18 @@ const CreateEventForm = () => {
                     <h2 className="text-xl font-semibold text-purple-100 mb-4">
                       Custom Fields
                     </h2>
-                    <FormFieldDropZone onDrop={(fieldType) => {
-                      handleFieldDrop(fieldType);
-                      // Scroll to the bottom of the custom fields list after dropping
-                      setTimeout(() => {
-                        window.scrollTo({
-                          top: document.documentElement.scrollHeight,
-                          behavior: "smooth"
-                        });
-                      }, 100);
-                    }} />
+                    <FormFieldDropZone
+                      onDrop={(fieldType) => {
+                        handleFieldDrop(fieldType);
+                        // Scroll to the bottom of the custom fields list after dropping
+                        setTimeout(() => {
+                          window.scrollTo({
+                            top: document.documentElement.scrollHeight,
+                            behavior: "smooth",
+                          });
+                        }, 100);
+                      }}
+                    />
                   </div>
 
                   {/* Added Fields Display */}
@@ -548,7 +590,7 @@ const CreateEventForm = () => {
             </form>
           </div>
         </div>
-        
+
         {/* Event Created Success Modal */}
         <EventCreatedModal
           isOpen={showSuccessModal}
@@ -557,7 +599,6 @@ const CreateEventForm = () => {
           onClose={handleCloseSuccessModal}
         />
       </div>
-      
     </DndProvider>
   );
 };
