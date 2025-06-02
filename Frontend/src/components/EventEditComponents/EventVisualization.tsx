@@ -132,7 +132,6 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({
 
   // Get all the tabs
   const allTabs = generateTabs();
-
   
 
   // Set initial active tab to the first tab if available
@@ -516,6 +515,7 @@ const handleCheckboxItemSelection = (categoryName: string, item: string) => {
     const category = eventData.chartsData.find(
       (c) => c.categoryName === categoryName
     );
+    console.log(`Checking if we can delete option in category "${categoryName}" with count ${category?.options.length}`);
     if (category && category.options.length <= 1) {
       return false; // Can't delete if it's the only option
     }
@@ -587,12 +587,22 @@ const handleCheckboxItemSelection = (categoryName: string, item: string) => {
       ? canDeleteListOption(effectiveFieldId)
       : canDeleteOption(categoryName);
 
-    if (!canDelete) {
-      toast.error(
-        "Cannot delete the only option in a category. At least one option must remain."
-      );
-      return;
+if (!canDelete) {
+  // Determine the error message based on field type
+  if (effectiveFieldId) {
+    const isTextField = eventData.textFieldsData?.some(f => f.fieldId === effectiveFieldId);
+    const isRequired = eventData.event.customFields?.[effectiveFieldId]?.required;
+    
+    if (isTextField && isRequired) {
+      toast.error("Cannot delete the only response in a required text field. At least one response must remain for finalization.");
+    } else {
+      toast.error("Cannot delete the only option in a category. At least one option must remain.");
     }
+  } else {
+    toast.error("Cannot delete the only option in a category. At least one option must remain.");
+  }
+  return;
+}
 
     setOptionToDelete({ categoryName, optionName, fieldId: effectiveFieldId });
     setIsConfirmOpen(true);
