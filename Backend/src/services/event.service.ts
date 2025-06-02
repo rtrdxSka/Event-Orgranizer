@@ -1672,6 +1672,29 @@ export const removeEventOption = async (
   // 1. Handle custom fields (radio, checkbox, list)
   if (effectiveFieldId && event.customFields && event.customFields.has(effectiveFieldId)) {
     const customField = event.customFields.get(effectiveFieldId);
+    console.log(`Processing custom field: ${effectiveFieldId}, type: ${customField?.type}`);
+     if (customField && customField.type === 'text') {
+      console.log(`Validating text field deletion for field: ${effectiveFieldId}`);
+    // Count total text responses for this field BEFORE making any changes
+    const textResponses = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      "fieldResponses": { 
+        $elemMatch: { 
+          fieldId: effectiveFieldId, 
+          type: 'text',
+          response: { $ne: "" }
+        } 
+      }
+    });
+
+     console.log(`Found ${textResponses.length} text responses for field ${effectiveFieldId}`);
+    
+    appAssert(
+      textResponses.length > 1,
+      BAD_REQUEST,
+      `Cannot remove the only response in required text field '${categoryName}'. At least one response must remain for event finalization.`
+    );
+  }
     
     // Check if this is a field with options (radio, checkbox)
     if (customField && customField.options && Array.isArray(customField.options)) {
@@ -1683,13 +1706,12 @@ export const removeEventOption = async (
       // If found, remove it
       if (fieldOptionIndex !== -1) {
         console.log(`Removing option "${optionName}" from customFields[${effectiveFieldId}].options`);
-        
         // Make sure there's more than one option for radio/checkbox fields
-        appAssert(
-          customField.options.length > 1,
-          BAD_REQUEST,
-          `Cannot remove the only option in field '${categoryName}'`
-        );
+        // appAssert(
+        //   customField.options.length > 1,
+        //   BAD_REQUEST,
+        //   `Cannot remove the only option in field '${categoryName}'`
+        // );
         
         customField.options.splice(fieldOptionIndex, 1);
         
@@ -1709,10 +1731,33 @@ export const removeEventOption = async (
       
       if (valueIndex !== -1) {
         console.log(`Removing value "${optionName}" from customFields[${effectiveFieldId}].values`);
+
+         const originalValuesCount = customField.values.length;
+    
+    // Get all user-added values for this list field from responses
+    const responses = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      "fieldResponses.fieldId": effectiveFieldId,
+      "fieldResponses.type": "list"
+    });
+    
+    const userAddedValues = new Set();
+    responses.forEach(response => {
+      const fieldResponse = response.fieldResponses.find(
+        fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
+      );
+      if (fieldResponse && Array.isArray(fieldResponse.response)) {
+        // User-added values are those beyond the original values length
+        const userValues = fieldResponse.response.slice(originalValuesCount);
+        userValues.forEach(value => userAddedValues.add(value));
+      }
+    });
+    
+    const totalOptionsCount = originalValuesCount + userAddedValues.size;
         
         // Make sure there's more than one value for list fields
         appAssert(
-          customField.values.length > 1,
+          totalOptionsCount > 1,
           BAD_REQUEST,
           `Cannot remove the only value in list field '${categoryName}'`
         );
@@ -1739,11 +1784,11 @@ export const removeEventOption = async (
       console.log(`Removing date "${optionName}" from eventDates.dates`);
       
       // Make sure there's more than one date
-      appAssert(
-        event.eventDates.dates.length > 1,
-        BAD_REQUEST,
-        `Cannot remove the only date in event date options`
-      );
+      // appAssert(
+      //   event.eventDates.dates.length > 1,
+      //   BAD_REQUEST,
+      //   `Cannot remove the only date in event date options`
+      // );
       
       event.eventDates.dates.splice(dateIndex, 1);
       
@@ -1760,11 +1805,11 @@ export const removeEventOption = async (
       console.log(`Removing place "${optionName}" from eventPlaces.places`);
       
       // Make sure there's more than one place
-      appAssert(
-        event.eventPlaces.places.length > 1,
-        BAD_REQUEST,
-        `Cannot remove the only place in event place options`
-      );
+      // appAssert(
+      //   event.eventPlaces.places.length > 1,
+      //   BAD_REQUEST,
+      //   `Cannot remove the only place in event place options`
+      // );
       
       event.eventPlaces.places.splice(placeIndex, 1);
       
