@@ -1724,6 +1724,45 @@ export const removeEventOption = async (
         console.log(`Option "${optionName}" not found in customFields[${effectiveFieldId}].options`);
       }
     } else if (customField && customField.type === 'list' && customField.values && Array.isArray(customField.values)) {
+      console.log(`Processing list field: ${effectiveFieldId}`);
+      const originalValuesCount = customField.values.length;
+      const originalValues = customField.values;
+      console.log(`Original values count: ${originalValuesCount}`);
+  console.log(`Original values:`, customField.values);
+    // Get all user-added values for this list field from responses
+    const responses = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      "fieldResponses.fieldId": effectiveFieldId,
+      "fieldResponses.type": "list"
+    });
+    
+  const userAddedValues = new Set();
+  responses.forEach(response => {
+    const fieldResponse = response.fieldResponses.find(
+      fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
+    );
+    if (fieldResponse && Array.isArray(fieldResponse.response)) {
+      // Find values that are NOT in the original values array
+      fieldResponse.response.forEach(value => {
+        if (!originalValues.includes(value)) {
+          userAddedValues.add(value);
+        }
+      });
+      console.log(`User ${response.userId} response:`, fieldResponse.response);
+    }
+  });
+    
+    const totalOptionsCount = originalValuesCount + userAddedValues.size;
+      console.log(`User added values (unique):`, Array.from(userAddedValues));
+  console.log(`Total options count: ${totalOptionsCount} (${originalValuesCount} original + ${userAddedValues.size} user-added)`);
+  console.log(`Trying to delete: "${optionName}"`)
+        
+        // Make sure there's more than one value for list fields
+        appAssert(
+          totalOptionsCount > 1,
+          BAD_REQUEST,
+          `Cannot remove the only value in list field '${categoryName}'`
+        );
       // For list fields, remove from values array
       const valueIndex = customField.values.findIndex(
         (value: string) => value.toLowerCase() === optionName.toLowerCase()
@@ -1732,35 +1771,7 @@ export const removeEventOption = async (
       if (valueIndex !== -1) {
         console.log(`Removing value "${optionName}" from customFields[${effectiveFieldId}].values`);
 
-         const originalValuesCount = customField.values.length;
-    
-    // Get all user-added values for this list field from responses
-    const responses = await EventResponseModel.find({
-      eventId: new mongoose.Types.ObjectId(eventId),
-      "fieldResponses.fieldId": effectiveFieldId,
-      "fieldResponses.type": "list"
-    });
-    
-    const userAddedValues = new Set();
-    responses.forEach(response => {
-      const fieldResponse = response.fieldResponses.find(
-        fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
-      );
-      if (fieldResponse && Array.isArray(fieldResponse.response)) {
-        // User-added values are those beyond the original values length
-        const userValues = fieldResponse.response.slice(originalValuesCount);
-        userValues.forEach(value => userAddedValues.add(value));
-      }
-    });
-    
-    const totalOptionsCount = originalValuesCount + userAddedValues.size;
-        
-        // Make sure there's more than one value for list fields
-        appAssert(
-          totalOptionsCount > 1,
-          BAD_REQUEST,
-          `Cannot remove the only value in list field '${categoryName}'`
-        );
+         
         
         customField.values.splice(valueIndex, 1);
         
