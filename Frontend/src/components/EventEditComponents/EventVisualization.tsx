@@ -127,6 +127,23 @@ const EventVisualization: React.FC<EventVisualizationProps> = ({
       });
     }
 
+    if (eventData.event.customFields) {
+    Object.entries(eventData.event.customFields).forEach(([fieldId, field]) => {
+      if (field.type === 'text' && field.readonly) {
+        // Check if this field is already added from textFieldsData
+        const alreadyExists = tabs.some(tab => tab.fieldId === fieldId);
+        if (!alreadyExists) {
+          tabs.push({
+            id: `text-${fieldId}`,
+            label: field.title,
+            type: "text",
+            fieldId: fieldId,
+          });
+        }
+      }
+    });
+  }
+
     return tabs;
   };
 
@@ -466,23 +483,34 @@ const handleCheckboxItemSelection = (categoryName: string, item: string) => {
   };
 
   // Handle text response selection
-  const handleTextResponseSelection = (fieldId: string, userId: string) => {
-    const updatedTextSelections = {
-      ...selectedTextResponses,
-      [fieldId]: userId,
-    };
-
-    setSelectedTextResponses(updatedTextSelections);
-
-    // Notify parent component of selection changes if callback provided
-    if (onSelectionChange) {
-      onSelectionChange({
-        categorySelections: selectedOptions,
-        listSelections: selectedListItems,
-        textSelections: updatedTextSelections,
-      });
-    }
+// Handle text response selection
+const handleTextResponseSelection = (fieldId: string, userId: string) => {
+  const currentSelection = selectedTextResponses[fieldId];
+  
+  // If the same user is already selected, deselect them
+  const updatedTextSelections = {
+    ...selectedTextResponses,
   };
+  
+  if (currentSelection === userId) {
+    // Deselect by removing the selection
+    delete updatedTextSelections[fieldId];
+  } else {
+    // Select the new user
+    updatedTextSelections[fieldId] = userId;
+  }
+
+  setSelectedTextResponses(updatedTextSelections);
+
+  // Notify parent component of selection changes if callback provided
+  if (onSelectionChange) {
+    onSelectionChange({
+      categorySelections: selectedOptions,
+      listSelections: selectedListItems,
+      textSelections: updatedTextSelections,
+    });
+  }
+};
 
   const getFieldIdFromCategoryName = (
     categoryName: string
@@ -573,40 +601,73 @@ const handleCheckboxItemSelection = (categoryName: string, item: string) => {
   };
 
   // Open confirm dialog for deleting an option
-  const openDeleteConfirm = (
-    categoryName: string,
-    optionName: string,
-    fieldId?: string
-  ) => {
-    // If fieldId is not provided, try to find it from category name
-    const effectiveFieldId =
-      fieldId || getFieldIdFromCategoryName(categoryName);
+const openDeleteConfirm = (
+  categoryName: string,
+  optionName: string,
+  fieldId?: string
+) => {
+  // If fieldId is not provided, try to find it from category name
+  const effectiveFieldId =
+    fieldId || getFieldIdFromCategoryName(categoryName);
 
-    // First check if we can delete this option
-    const canDelete = effectiveFieldId
-      ? canDeleteListOption(effectiveFieldId)
-      : canDeleteOption(categoryName);
+  // Determine field type and check if deletion is allowed
+  let canDelete = true;
+  let errorMessage = "";
 
-if (!canDelete) {
-  // Determine the error message based on field type
   if (effectiveFieldId) {
-    const isTextField = eventData.textFieldsData?.some(f => f.fieldId === effectiveFieldId);
-    const isRequired = eventData.event.customFields?.[effectiveFieldId]?.required;
+    // Check if it's a custom field
+    const fieldData = eventData.event.customFields?.[effectiveFieldId];
     
-    if (isTextField && isRequired) {
-      toast.error("Cannot delete the only response in a required text field. At least one response must remain for finalization.");
+    if (fieldData) {
+      if (fieldData.type === 'text') {
+        // For text fields, check if it's required and if it's the only response
+        const textField = eventData.textFieldsData?.find(f => f.fieldId === effectiveFieldId);
+        const responseCount = textField?.responses.length || 0;
+        
+        if (fieldData.required && responseCount <= 1) {
+          canDelete = false;
+          errorMessage = `Cannot delete the only response in required text field "${fieldData.title}". At least one response must remain for finalization.`;
+        } else if (!fieldData.readonly && responseCount <= 1) {
+          canDelete = false;
+          errorMessage = `Cannot delete the only response in text field "${fieldData.title}". At least one response must remain.`;
+        }
+      } else if (fieldData.type === 'list') {
+        // For list fields
+        canDelete = canDeleteListOption(effectiveFieldId);
+        if (!canDelete) {
+          errorMessage = `Cannot delete the only option in list field "${fieldData.title}". At least one option must remain.`;
+        }
+      } else if (fieldData.type === 'radio' || fieldData.type === 'checkbox') {
+        // For radio/checkbox fields, check the voting category
+        const category = eventData.chartsData.find(c => c.categoryName === categoryName);
+        if (category && category.options.length <= 1) {
+          canDelete = false;
+          errorMessage = `Cannot delete the only option in ${fieldData.type} field "${fieldData.title}". At least one option must remain.`;
+        }
+      }
     } else {
-      toast.error("Cannot delete the only option in a category. At least one option must remain.");
+      // Fallback for list fields
+      canDelete = canDeleteListOption(effectiveFieldId);
+      if (!canDelete) {
+        errorMessage = "Cannot delete the only option in this list. At least one option must remain.";
+      }
     }
   } else {
-    toast.error("Cannot delete the only option in a category. At least one option must remain.");
+    // For date/place categories
+    canDelete = canDeleteOption(categoryName);
+    if (!canDelete) {
+      errorMessage = `Cannot delete the only option in ${categoryName.toLowerCase()} category. At least one option must remain.`;
+    }
   }
-  return;
-}
 
-    setOptionToDelete({ categoryName, optionName, fieldId: effectiveFieldId });
-    setIsConfirmOpen(true);
-  };
+  if (!canDelete) {
+    toast.error(errorMessage);
+    return;
+  }
+
+  setOptionToDelete({ categoryName, optionName, fieldId: effectiveFieldId });
+  setIsConfirmOpen(true);
+};
 
   return (
     <div>
@@ -1160,7 +1221,18 @@ if (!canDelete) {
         ))}
 
         {/* Content for Text Field Tabs */}
-        {eventData.textFieldsData?.map((field) => (
+        {[
+  ...(eventData.textFieldsData || []),
+  // Add read-only text fields
+  ...Object.entries(eventData.event.customFields || {})
+    .filter(([, field]) => field.type === 'text' && field.readonly)
+    .filter(([fieldId]) => !eventData.textFieldsData?.some(f => f.fieldId === fieldId))
+    .map(([fieldId, field]) => ({
+      fieldId,
+      categoryName: field.title,
+      responses: [] as TextFieldResponse[]
+    }))
+].map((field) => (
           <TabsContent
             key={`text-${field.fieldId}`}
             value={`text-${field.fieldId}`}
@@ -1168,21 +1240,78 @@ if (!canDelete) {
           >
             <Card className="bg-purple-900/40 border-purple-700/50">
               <CardHeader>
-                <CardTitle className="text-xl text-purple-100 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-purple-300" />
-                  {field.categoryName} Responses
-                  <Badge className="ml-2 bg-blue-600/30">
-                    {field.responses.length}{" "}
-                    {field.responses.length === 1 ? "response" : "responses"}
-                  </Badge>
-                </CardTitle>
+<CardTitle className="text-xl text-purple-100 flex items-center gap-2">
+  <MessageSquare className="w-5 h-5 text-purple-300" />
+  {field.categoryName} Responses
+  <Badge className="ml-2 bg-blue-600/30">
+    {field.responses.length}{" "}
+    {field.responses.length === 1 ? "response" : "responses"}
+  </Badge>
+</CardTitle>
               </CardHeader>
-              <CardContent>
-                {field.responses.length === 0 ? (
-                  <div className="text-center py-10 bg-purple-800/20 rounded-lg">
-                    <p className="text-purple-300 italic">No responses yet</p>
-                  </div>
-                ) : (
+<CardContent>
+  {eventData.event.customFields?.[field.fieldId]?.readonly ? (
+    <div className="bg-purple-800/30 rounded-lg p-4">
+      <h3 className="text-lg font-medium text-purple-100 mb-2">
+        Default Value
+      </h3>
+      <div className="text-purple-300 text-sm mb-2">
+        Select the default value
+        {selectedTextResponses[field.fieldId] && " (1 selected)"}
+      </div>
+      <Card
+        className={`bg-purple-800/40 border-purple-700/50 ${
+          selectedTextResponses[field.fieldId] === 'readonly-default'
+            ? "border-2 border-purple-500"
+            : "border-purple-500/50"
+        } cursor-pointer hover:bg-purple-800/60 transition-colors`}
+        onClick={() =>
+          handleTextResponseSelection(field.fieldId, 'readonly-default')
+        }
+      >
+        <CardContent className="p-4">
+          <div className="flex flex-col space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTextResponseSelection(field.fieldId, 'readonly-default');
+                  }}
+                  className={`flex items-center justify-center w-5 h-5 rounded mr-2 ${
+                    selectedTextResponses[field.fieldId] === 'readonly-default'
+                      ? "bg-purple-500 text-white"
+                      : "bg-purple-800 hover:bg-purple-700"
+                  }`}
+                >
+                  {selectedTextResponses[field.fieldId] === 'readonly-default' && (
+                    <Check className="h-3 w-3" />
+                  )}
+                </button>
+                <Badge className="bg-gray-600">Default Value</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedTextResponses[field.fieldId] === 'readonly-default' && (
+                  <Badge className="bg-green-600/30 text-green-200">
+                    Selected
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="bg-purple-800/30 p-3 rounded-md border border-purple-700/50">
+              <p className="text-purple-100">
+                {eventData.event.customFields[field.fieldId].value || "No default value set"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  ) : field.responses.length === 0 ? (
+    <div className="text-center py-10 bg-purple-800/20 rounded-lg">
+      <p className="text-purple-300 italic">No responses yet</p>
+    </div>
+  ) : (
                   <>
                     <div className="mb-4 pb-2 border-b border-purple-700/30">
                       <h3 className="text-lg font-medium text-purple-100 mb-1">
