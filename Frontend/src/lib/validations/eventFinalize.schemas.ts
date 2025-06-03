@@ -24,6 +24,8 @@ interface EventForValidation {
     required: boolean;
     maxEntries?: number;
     values?: string[];
+    value?: string; // Add this for text field default values
+    readonly?: boolean;
   }>;
   textFieldsData?: Array<{
     fieldId: string;
@@ -174,10 +176,15 @@ if (!validationResult.success) {
 };
 
 // Helper function to prepare finalization data from selections
+// Helper function to prepare finalization data from selections
 const prepareFinalizeData = (
   finalizeSelections: FinalizeSelections,
   event: EventForValidation
 ) => {
+  console.log("=== VALIDATION PREPARE FINALIZE DATA ===");
+  console.log("Input finalizeSelections:", finalizeSelections);
+  console.log("Event customFields:", event.customFields);
+  
   const { categorySelections, listSelections, textSelections } = finalizeSelections;
   
   // Initialize the data structure
@@ -187,16 +194,19 @@ const prepareFinalizeData = (
   const dateSelection = getFinalDateSelection(categorySelections);
   if (dateSelection) {
     finalizeData.date = dateSelection;
+    console.log("Added date selection:", dateSelection);
   }
   
   // Extract place selection
   const placeSelection = getFinalPlaceSelection(categorySelections);
   if (placeSelection) {
     finalizeData.place = placeSelection;
+    console.log("Added place selection:", placeSelection);
   }
   
   // Process voting categories (radio & checkbox fields)
   if (event.votingCategories) {
+    console.log("Processing voting categories...");
     event.votingCategories.forEach((category: VotingCategory) => {
       // Skip date and place categories
       if (category.categoryName.toLowerCase() === 'date' || 
@@ -225,54 +235,86 @@ const prepareFinalizeData = (
         }
       }
       
+      console.log(`Category ${category.categoryName} (${fieldId}):`, selections);
+      
       // Store the selection(s)
       if (selections.length === 1 && event.customFields?.[fieldId].type === 'radio') {
         // For radio fields, store a single value
         finalizeData[fieldId] = selections[0];
+        console.log(`Added radio field ${fieldId}:`, selections[0]);
       } else if (selections.length > 0 && event.customFields?.[fieldId].type === 'checkbox') {
         // For checkbox fields, store an array of values
         finalizeData[fieldId] = selections;
+        console.log(`Added checkbox field ${fieldId}:`, selections);
       }
     });
   }
   
   // Process list field selections
   if (listSelections) {
+    console.log("Processing list field selections:", listSelections);
     for (const [fieldId, selections] of Object.entries(listSelections)) {
       if (selections.length > 0) {
         finalizeData[fieldId] = selections;
+        console.log(`Added list field ${fieldId}:`, selections);
       }
     }
   }
   
   // Process text field selections
   if (textSelections && event.customFields) {
-  for (const [fieldId, selectedResponseUserId] of Object.entries(textSelections)) {
-    // Check if this field exists in customFields
-    if (event.customFields[fieldId]) {
-      if (selectedResponseUserId) {
-        // For text field that uses the user ID to identify selected content
-        // Find the corresponding text field response data from the event data
-        const textFieldData = event.textFieldsData?.find((field) => field.fieldId === fieldId);
-        
-        if (textFieldData) {
-          // Find the selected response
-          const selectedResponse = textFieldData.responses.find(
-            (response) => response.userId === selectedResponseUserId
-          );
-          
-          if (selectedResponse) {
-            finalizeData[fieldId] = selectedResponse.response;
+    console.log("Processing text field selections:", textSelections);
+    for (const [fieldId, selectedResponseUserId] of Object.entries(textSelections)) {
+      console.log(`Processing text field ${fieldId} with userId: ${selectedResponseUserId}`);
+      
+      // Check if this field exists in customFields
+      if (event.customFields[fieldId]) {
+        if (selectedResponseUserId) {
+          // Handle special case for read-only default values
+          if (selectedResponseUserId === 'readonly-default') {
+            console.log(`Handling readonly-default for field ${fieldId}`);
+            // Get the default value directly from the field definition
+            const fieldDef = event.customFields[fieldId] as { type: FieldType; value?: string };
+            console.log(`Field definition:`, fieldDef);
+            
+            if (fieldDef && fieldDef.type === 'text') {
+              // Use the field's default value or empty string
+              const defaultValue = fieldDef.value || "";
+              finalizeData[fieldId] = defaultValue;
+              console.log(`Added readonly text field ${fieldId} with default value:`, defaultValue);
+            }
+          } else {
+            // For regular text field responses, find the response by user ID
+            const textFieldData = event.textFieldsData?.find((field) => field.fieldId === fieldId);
+            console.log(`Found text field data for ${fieldId}:`, textFieldData);
+            
+            if (textFieldData) {
+              // Find the selected response
+              const selectedResponse = textFieldData.responses.find(
+                (response) => response.userId === selectedResponseUserId
+              );
+              
+              if (selectedResponse) {
+                finalizeData[fieldId] = selectedResponse.response;
+                console.log(`Added text field ${fieldId} with response:`, selectedResponse.response);
+              }
+            } else {
+              // If we can't find the detailed response, just use the userId as a placeholder
+              // This ensures the field is not considered empty
+              const placeholder = `Selected response from user ${selectedResponseUserId}`;
+              finalizeData[fieldId] = placeholder;
+              console.log(`Added text field ${fieldId} with placeholder:`, placeholder);
+            }
           }
-        } else {
-          // If we can't find the detailed response, just use the userId as a placeholder
-          // This ensures the field is not considered empty
-          finalizeData[fieldId] = `Selected response from user ${selectedResponseUserId}`;
         }
+      } else {
+        console.log(`Field ${fieldId} not found in customFields`);
       }
     }
   }
-}
+  
+  console.log("Final validation data:", finalizeData);
+  console.log("=== END VALIDATION PREPARE FINALIZE DATA ===");
   
   return finalizeData;
 };

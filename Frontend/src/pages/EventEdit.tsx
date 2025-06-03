@@ -87,6 +87,9 @@ useEffect(() => {
   const prepareFinalizeData = () => {
     if (!eventData) return null;
 
+      console.log("=== PREPARE FINALIZE DATA ===");
+  console.log("Current finalizeSelections:", finalizeSelections);
+
     // Extract date selection
     const dateSelection = getFinalDateSelection();
     
@@ -95,6 +98,16 @@ useEffect(() => {
     
     // Extract custom field selections
     const customFieldSelections = getFinalCustomFieldSelections();
+      console.log("Custom field selections:", customFieldSelections);
+
+      const finalData = {
+    date: dateSelection,
+    place: placeSelection,
+    customFields: customFieldSelections
+  };
+  
+  console.log("Final prepared data:", finalData);
+  console.log("=== END PREPARE FINALIZE DATA ===");
     
     // Return the complete data structure
     return {
@@ -192,10 +205,18 @@ useEffect(() => {
     }
     
     // Process text field selections
-    if (eventData.textFieldsData) {
-      eventData.textFieldsData.forEach(field => {
-        const selectedResponseUserId = finalizeSelections.textSelections[field.fieldId];
-        if (selectedResponseUserId) {
+if (eventData.textFieldsData) {
+    eventData.textFieldsData.forEach(field => {
+      const selectedResponseUserId = finalizeSelections.textSelections[field.fieldId];
+      if (selectedResponseUserId) {
+        // Handle special case for read-only default values
+        if (selectedResponseUserId === 'readonly-default') {
+          // Get the default value directly from the field definition
+          const fieldDef = eventData.event.customFields?.[field.fieldId];
+          if (fieldDef && fieldDef.type === 'text') {
+            customFields[field.fieldId] = fieldDef.value || "";
+          }
+        } else {
           // Find the selected response
           const selectedResponse = field.responses.find(
             response => response.userId === selectedResponseUserId
@@ -204,8 +225,22 @@ useEffect(() => {
             customFields[field.fieldId] = selectedResponse.response;
           }
         }
-      });
-    }
+      }
+    });
+  }
+  
+  // Process readonly text fields that might not be in textFieldsData
+  if (eventData.event.customFields) {
+    Object.entries(eventData.event.customFields).forEach(([fieldId, field]) => {
+      if (field.type === 'text' && field.readonly) {
+        const selectedResponseUserId = finalizeSelections.textSelections[fieldId];
+        if (selectedResponseUserId === 'readonly-default') {
+          customFields[fieldId] = field.value || "";
+          console.log(`Added readonly text field ${fieldId} with value:`, field.value);
+        }
+      }
+    });
+  }
     
     return customFields;
   };
