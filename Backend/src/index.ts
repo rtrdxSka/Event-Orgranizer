@@ -47,6 +47,6 @@ app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
   await connectToDatabase(); 
 
-  //  initCronJobs();
+   initCronJobs();
 });
 
