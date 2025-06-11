@@ -66,7 +66,7 @@ function App() {
 
 <Route path="/event/edit/:eventId" element={<ProtectedRoute><EventEdit /></ProtectedRoute>} />
 
-<Route path="/event/finalized/:eventUUID" element={<FinalizedEventView />} />
+<Route path="/event/finalized/:eventUUID" element={<ProtectedRoute><FinalizedEventView /></ProtectedRoute>} />
 
 <Route path="/calendar-auth" element={<GoogleCalendarCallback />} />
 
