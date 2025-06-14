@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import queryClient from './queryClient';
 import { navigate } from '@/lib/navigation';
 
@@ -14,14 +14,15 @@ interface APIError {
     status: number;
     data: {
       errorCode?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     };
   };
-  config: any;
+  config: AxiosRequestConfig;
 }
 
 // Add a flag to track token validity
-let isTokenValid = true;
+let isRefreshing = false;
+let refreshPromise: Promise<void> | null = null;
 
 API.interceptors.response.use(
   (response: AxiosResponse) => response.data,
@@ -29,23 +30,53 @@ API.interceptors.response.use(
     const { config, response } = error;
     const { status, data } = response || {};
 
-    if (status === 401 && data?.errorCode === "INVALID_ACCESS_TOKEN" && isTokenValid) {
-      // Mark token as invalid
-      isTokenValid = false;
-      
+    if (status === 401 && data?.errorCode === "INVALID_ACCESS_TOKEN") {
+      // If already refreshing, wait for that refresh to complete
+      if (isRefreshing && refreshPromise) {
+        try {
+          await refreshPromise;
+          // Retry the original request after refresh completes
+          return API(config);
+        } catch {
+          // Refresh failed, redirect to login
+          queryClient.clear();
+          navigate("/login", {
+            state: {
+              redirectUrl: window.location.pathname
+            }
+          } as { state: { redirectUrl: string } });
+          return Promise.reject({ status, ...data });
+        }
+      }
+
+      // Start the refresh process
+      isRefreshing = true;
+      refreshPromise = API.get("/auth/refresh")
+        .then(() => {
+          // Success - reset flags
+          isRefreshing = false;
+          refreshPromise = null;
+        })
+        .catch((refreshError) => {
+          // Failed - reset flags and redirect
+          isRefreshing = false;
+          refreshPromise = null;
+          queryClient.clear();
+          navigate("/login", {
+            state: {
+              redirectUrl: window.location.pathname
+            }
+          } as { state: { redirectUrl: string } });
+          throw refreshError;
+        });
+
       try {
-        await API.get("/auth/refresh");
-        // Token refreshed successfully, mark as valid again
-        isTokenValid = true;
-        // Retry the original request
+        await refreshPromise;
+        // Token refreshed successfully, retry the original request
         return API(config);
-      } catch (error) {
-        queryClient.clear();
-        navigate("/login", {
-          state: {
-            redirectUrl: window.location.pathname
-          }
-        } as { state: { redirectUrl: string } });
+      } catch {
+        // Already handled in the catch above
+        return Promise.reject({ status, ...data });
       }
     }
     

@@ -4,14 +4,17 @@ import { INTERNAL_SERVER_ERROR, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, FORBIDDEN 
 import EventModel, { EventDocument } from "../models/event.model";
 import UserModel from "../models/user.model";
 import appAssert from "../utils/appAssert";
-import { CreateEventInput, createEventSchema } from "../controllers/event.schemas";
+import { CreateEventInput, createEventSchema } from "../validations/event.schemas";
 import EventResponseModel from "../models/eventResponse.model";
-import { CreateEventResponseInput } from "../controllers/eventResponse.schemas";
+import { CreateEventResponseInput } from "../validations/eventResponse.schemas";
 
 import { sendMail } from "../utils/sendMail";
-import { getNewOptionsAddedTemplate } from "../utils/emailTemplates";
+import { getEventFinalizedTemplate, getNewOptionsAddedTemplate } from "../utils/emailTemplates";
 import { APP_ORIGIN } from "../constants/env";
 import FinalizedEventModel from "../models/FinalizedEvent";
+import { validateEventResponseDataOrThrow } from "../validations/eventResponse.validation";
+import { validateAndConvertCustomFields } from "../validations/customFieldValidation";
+import { finalizeEventRequestSchema } from "../validations/eventFinalize.schemas";
 
 interface CustomFieldOption {
   id: number;
@@ -80,83 +83,9 @@ export const createEvent = async (data: CreateEventInput) => {
     const filteredPlaces = data.eventPlaces.places.filter(place => place.trim() !== "");
 
     // Convert customFields to Map with proper validation
-    const customFieldsMap = new Map();
-    if (data.customFields) {
-      // First validate each custom field
-      Object.entries(data.customFields).forEach(([key, field]) => {
-        // Perform additional validation based on field type
-        switch (field.type) {
-          case "text":
-            // Text fields validation - ensure value is properly set
-            if (field.readonly && (!field.value || field.value.trim() === "")) {
-              appAssert(false, BAD_REQUEST, `Read-only text field "${field.title}" must have a value`);
-            }
-            break;
-
-          case "radio":
-            // Radio fields validation
-            if (field.options.length < 2) {
-              appAssert(false, BAD_REQUEST, `Radio field "${field.title}" must have at least 2 options`);
-            }
-            if (field.readonly && field.selectedOption === null) {
-              appAssert(false, BAD_REQUEST, `Read-only radio field "${field.title}" must have a selected option`);
-            }
-            // Validate option labels
-            field.options.forEach((option, index) => {
-              if (!option.label || option.label.trim() === "") {
-                appAssert(false, BAD_REQUEST, `Option ${index + 1} in field "${field.title}" must have a label`);
-              }
-            });
-            break;
-
-          case "checkbox":
-            // Checkbox fields validation
-            if (field.options.length < 1) {
-              appAssert(false, BAD_REQUEST, `Checkbox field "${field.title}" must have at least 1 option`);
-            }
-            // Validate option labels
-            field.options.forEach((option, index) => {
-              if (!option.label || option.label.trim() === "") {
-                appAssert(false, BAD_REQUEST, `Option ${index + 1} in field "${field.title}" must have a label`);
-              }
-            });
-            break;
-
-          case "list":
-            // List fields validation
-            if (field.readonly) {
-              if (field.allowUserAdd) {
-                appAssert(false, BAD_REQUEST, `Read-only list field "${field.title}" cannot allow users to add entries`);
-              }
-              if (field.maxEntries > 0 && field.values.length !== field.maxEntries) {
-                appAssert(false, BAD_REQUEST, `Read-only list field "${field.title}" must have exactly ${field.maxEntries} entries, but has ${field.values.length}`);
-              }
-              if (field.values.some(v => !v || v.trim() === "")) {
-                appAssert(false, BAD_REQUEST, `All entries in read-only list field "${field.title}" must have values`);
-              }
-            } else{
-              const hasEmptyField = field.values.some(v => v.trim() === '');
-              const hasRoomForMore = field.maxEntries === 0 || field.values.length < field.maxEntries;
-              if (!field.allowUserAdd) {
-                appAssert(false, BAD_REQUEST, `List field "${field.title}" must allow users to add entries`);
-              }else{
-                
-                if (!hasEmptyField && !hasRoomForMore) {
-                  appAssert(false, BAD_REQUEST, `List field "${field.title}" is full and does not allow more entries`);
-                }
-              }
-            }
-            // Validate max entries
-            if (field.maxEntries > 0 && field.values.length > field.maxEntries) {
-              appAssert(false, BAD_REQUEST, `Number of entries in list field "${field.title}" (${field.values.length}) exceeds maximum allowed (${field.maxEntries})`);
-            }
-            break;
-        }
-
-        // Add validated field to the map
-        customFieldsMap.set(key, field);
-      });
-    }
+    const customFieldsMap = data.customFields 
+      ? validateAndConvertCustomFields(data.customFields)
+      : new Map();
 
     // Prepare voting categories if not provided
     let votingCategories = data.votingCategories || [];
@@ -258,6 +187,8 @@ export const createOrUpdateEventResponse = async (
   const event = await EventModel.findById(data.eventId);
   appAssert(event, NOT_FOUND, "Event not found");
 
+  validateEventResponseDataOrThrow(data, event);
+
   // Verify user exists
   const user = await UserModel.findById(userId);
   appAssert(user, NOT_FOUND, "User not found");
@@ -353,7 +284,7 @@ export const createOrUpdateEventResponse = async (
     
     // Add new votes
     data.selectedPlaces.forEach(place => {
-      const option = placeCategory!.options.find(opt => opt.optionName === place);
+      const option = placeCategory!.options.find(opt => opt.optionName.toLowerCase() === place.toLowerCase());
       if (option) {
         option.votes.push(userObjectId);
       }
@@ -363,7 +294,7 @@ export const createOrUpdateEventResponse = async (
     if (Array.isArray(data.suggestedPlaces) && data.suggestedPlaces.length > 0 && event.eventPlaces.allowUserAdd) {
       for (const place of data.suggestedPlaces) {
         // Add to event category if it doesn't exist
-        const exists = placeCategory.options.some(opt => opt.optionName === place);
+        const exists = placeCategory.options.some(opt => opt.optionName.toLowerCase() === place.toLowerCase());
         if (!exists) {
           placeCategory.options.push({
             optionName: place,
@@ -399,7 +330,7 @@ export const createOrUpdateEventResponse = async (
     
     // Find matching category in the event
     let eventCategory = event.votingCategories.find(
-      cat => cat.categoryName === responseCategory.categoryName
+      cat => cat.categoryName.toLowerCase() === responseCategory.categoryName.toLowerCase()
     );
 
     if (!eventCategory) {
@@ -599,25 +530,37 @@ export const getEventResponses = async (eventId: string) => {
 
 //fetch other user responses
 
-export const getOtherUserResponses = async (eventId: string, currentUserId: string) => {
+// services/event.service.ts - Optimized version
+
+export const getOtherUserResponses = async (
+  eventId: string, 
+  currentUserId: string,
+  options: {
+    limit?: number;
+    page?: number;
+    maxSuggestionsPerField?: number;
+  } = {}
+) => {
+  const { limit = 50, page = 0, maxSuggestionsPerField = 100 } = options;
+  
   // Verify event exists
   const event = await EventModel.findById(eventId);
   appAssert(event, NOT_FOUND, "Event not found");
 
-  // Get all responses for this event except the current user's
-  const otherResponses = await EventResponseModel.find({
-    eventId,
-    userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
-  }).populate('userId', 'email name');
-
-  // Get current user's response for filtering
+  // Get current user's response for filtering (keep this as is for comparison)
   const currentUserResponse = await EventResponseModel.findOne({
     eventId,
     userId: currentUserId
   });
 
-  // Extract unique suggestions from all responses
-  const uniqueSuggestions = {
+  // For testing pagination, we'll fetch all responses but limit the suggestions per page
+  const otherResponses = await EventResponseModel.find({
+    eventId: new mongoose.Types.ObjectId(eventId),
+    userId: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+  }).populate('userId', 'email name');
+
+  // Process in smaller chunks to avoid memory issues
+  const allUniqueSuggestions = {
     dates: new Set<string>(),
     places: new Set<string>(),
     customFields: {} as Record<string, Set<string>>
@@ -642,135 +585,168 @@ export const getOtherUserResponses = async (eventId: string, currentUserId: stri
     return false;
   };
 
-  // Define the interface for field options
-  interface FieldOption {
-    id: number;
-    label: string;
-  }
-
-  // Process all other users' responses
-  otherResponses.forEach(response => {
-    // Process dates
-    response.suggestedDates.forEach(date => {
-      if (isUniqueDate(date)) {
-        uniqueSuggestions.dates.add(date);
-      }
-    });
-
-    // Process places
-    response.suggestedPlaces.forEach(place => {
-      if (isUniquePlace(place)) {
-        uniqueSuggestions.places.add(place);
-      }
-    });
-
-    // Process custom field responses for list type
-    response.fieldResponses.forEach(fieldResponse => {
-      const { fieldId, type, response: fieldValue } = fieldResponse;
-      
-      // Only process relevant field types
-      if (type === 'list' && Array.isArray(fieldValue)) {
-        if (!uniqueSuggestions.customFields[fieldId]) {
-          uniqueSuggestions.customFields[fieldId] = new Set<string>();
+  // First, collect ALL unique suggestions
+  for (const response of otherResponses) {
+    try {
+      // Process dates
+      if (response.suggestedDates) {
+        for (const date of response.suggestedDates) {
+          if (isUniqueDate(date)) {
+            allUniqueSuggestions.dates.add(date);
+          }
         }
-        
-        // Add each unique list item
-        fieldValue.forEach(value => {
-          if (typeof value === 'string' && value.trim() !== '') {
-            // Check if this value is unique compared to current user's response
-            let isUnique = true;
+      }
+
+      // Process places
+      if (response.suggestedPlaces) {
+        for (const place of response.suggestedPlaces) {
+          if (isUniquePlace(place)) {
+            allUniqueSuggestions.places.add(place);
+          }
+        }
+      }
+
+      // Process custom field responses
+      if (response.fieldResponses) {
+        for (const fieldResponse of response.fieldResponses) {
+          const { fieldId, type, response: fieldValue } = fieldResponse;
+          
+          if (type === 'list' && Array.isArray(fieldValue)) {
+            if (!allUniqueSuggestions.customFields[fieldId]) {
+              allUniqueSuggestions.customFields[fieldId] = new Set<string>();
+            }
             
-            if (currentUserResponse) {
-              const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
-              if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
-                if (userFieldResponse.response.includes(value)) {
-                  isUnique = false;
+            const fieldSet = allUniqueSuggestions.customFields[fieldId];
+            
+            for (const value of fieldValue) {
+              if (typeof value === 'string' && value.trim() !== '') {
+                // Check uniqueness logic here
+                let isUnique = true;
+                if (currentUserResponse) {
+                  const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
+                  if (userFieldResponse && Array.isArray(userFieldResponse.response)) {
+                    if (userFieldResponse.response.includes(value)) {
+                      isUnique = false;
+                    }
+                  }
+                }
+                
+                if (isUnique) {
+                  fieldSet.add(value);
                 }
               }
             }
-            
-            if (isUnique) {
-              uniqueSuggestions.customFields[fieldId].add(value);
-            }
-          }
-        });
-      }
-    });
-
-    // Process suggested options from other users (for radio and checkbox fields)
-    // We need a different approach since suggestedOptions isn't a regular object
-    if (response.suggestedOptions) {
-      // Get just the JSON data of suggestedOptions to avoid Mongoose internal properties
-      try {
-        // Try to get the data as a plain object
-        const plainObj = JSON.parse(JSON.stringify(response.suggestedOptions));
-        
-        // Process each field ID
-        for (const fieldId in plainObj) {
-          // Skip date and place categories
-          if (fieldId === 'date' || fieldId === 'place') continue;
-          
-          // Ensure this is a real field ID in our event
-          if (event.customFields && event.customFields.has(fieldId)) {
-            const options = plainObj[fieldId];
-            
-            // Initialize set for this field if needed
-            if (!uniqueSuggestions.customFields[fieldId]) {
-              uniqueSuggestions.customFields[fieldId] = new Set<string>();
-            }
-            
-            // Process each option
-            if (Array.isArray(options)) {
-              options.forEach(option => {
-                if (typeof option === 'string' && option.trim()) {
-                  // Check if option is already in user's suggestions
-                  let alreadyInUserSuggestions = false;
-                  if (currentUserResponse?.suggestedOptions) {
-                    const userSuggestions = JSON.parse(JSON.stringify(currentUserResponse.suggestedOptions));
-                    if (userSuggestions[fieldId] && Array.isArray(userSuggestions[fieldId])) {
-                      alreadyInUserSuggestions = userSuggestions[fieldId].includes(option);
-                    }
-                  }
-                  
-                  // Check if option is an original field option
-                  const fieldDef = event.customFields.get(fieldId);
-                  let isOriginalOption = false;
-                  if (fieldDef?.options && Array.isArray(fieldDef.options)) {
-                    isOriginalOption = fieldDef.options.some((opt: FieldOption) => opt.label === option);
-                  }
-                  
-                  // Add if it's a unique user suggestion
-                  if (!alreadyInUserSuggestions && !isOriginalOption) {
-                    uniqueSuggestions.customFields[fieldId].add(option);
-                  }
-                }
-              });
-            }
           }
         }
-      } catch (error) {
-        console.error('Error processing suggestedOptions:', error);
       }
-    }
-  });
 
-  // Convert Sets to arrays for the response
-  return {
-    event: {
-      _id: event._id,
-      name: event.name,
-      description: event.description
-    },
-    uniqueSuggestions: {
-      dates: Array.from(uniqueSuggestions.dates),
-      places: Array.from(uniqueSuggestions.places),
-      customFields: Object.fromEntries(
-        Object.entries(uniqueSuggestions.customFields).map(([key, valueSet]) => 
-          [key, Array.from(valueSet)]
-        )
-      )
+      // Process suggested options
+      if (response.suggestedOptions) {
+        try {
+          const plainObj = JSON.parse(JSON.stringify(response.suggestedOptions));
+          
+          for (const fieldId in plainObj) {
+            if (fieldId === 'date' || fieldId === 'place') continue;
+            
+            if (event.customFields && event.customFields.has(fieldId)) {
+              if (!allUniqueSuggestions.customFields[fieldId]) {
+                allUniqueSuggestions.customFields[fieldId] = new Set<string>();
+              }
+              
+              const fieldSet = allUniqueSuggestions.customFields[fieldId];
+              const options = plainObj[fieldId];
+              
+              if (Array.isArray(options)) {
+                for (const option of options) {
+                  if (typeof option === 'string' && option.trim()) {
+                    // Check uniqueness logic
+                    let alreadyInUserSuggestions = false;
+                    if (currentUserResponse?.suggestedOptions) {
+                      const userSuggestions = JSON.parse(JSON.stringify(currentUserResponse.suggestedOptions));
+                      if (userSuggestions[fieldId] && Array.isArray(userSuggestions[fieldId])) {
+                        alreadyInUserSuggestions = userSuggestions[fieldId].includes(option);
+                      }
+                    }
+                    
+                    const fieldDef = event.customFields.get(fieldId);
+                    let isOriginalOption = false;
+                    if (fieldDef?.options && Array.isArray(fieldDef.options)) {
+                      isOriginalOption = fieldDef.options.some((opt: any) => opt.label === option);
+                    }
+                    
+                    if (!alreadyInUserSuggestions && !isOriginalOption) {
+                      fieldSet.add(option);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error processing suggestedOptions for response:', response._id, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing response:', response._id, error);
     }
+  }
+
+  // Now apply pagination to the collected suggestions
+  const startIndex = page * limit;
+  const endIndex = startIndex + limit;
+
+  // Convert to arrays and apply pagination
+  const allDates = Array.from(allUniqueSuggestions.dates);
+  const allPlaces = Array.from(allUniqueSuggestions.places);
+  
+  const paginatedSuggestions = {
+    dates: allDates.slice(startIndex, endIndex),
+    places: allPlaces.slice(startIndex, endIndex),
+    customFields: Object.fromEntries(
+      Object.entries(allUniqueSuggestions.customFields).map(([fieldId, valueSet]) => {
+        const allValues = Array.from(valueSet);
+        return [fieldId, allValues.slice(startIndex, endIndex)];
+      })
+    )
   };
+
+  // Determine if there are more suggestions available
+// Determine if there are more suggestions available
+// Determine if there are more suggestions available for each field
+const hasMoreDates = endIndex < allDates.length;
+const hasMorePlaces = endIndex < allPlaces.length;
+
+// Per-field hasMore for custom fields
+const customFieldsHasMore = Object.fromEntries(
+  Object.entries(allUniqueSuggestions.customFields).map(([fieldId, valueSet]) => [
+    fieldId, 
+    endIndex < Array.from(valueSet).length
+  ])
+);
+
+const hasMore = hasMoreDates || hasMorePlaces || Object.values(customFieldsHasMore).some(Boolean);
+
+const result = {
+  event: {
+    _id: event._id,
+    name: event.name,
+    description: event.description
+  },
+  uniqueSuggestions: paginatedSuggestions,
+  hasMore,
+  hasMoreByField: {
+    dates: hasMoreDates,
+    places: hasMorePlaces,
+    customFields: customFieldsHasMore
+  },
+  pagination: {
+    page,
+    limit,
+    total: null
+  }
+};
+
+  return result;
 };
 
 
@@ -1031,6 +1007,7 @@ interface ChartOptionData {
   optionName: string;
   voteCount: number;
   voters: mongoose.Types.ObjectId[];
+  voterDetails?: Array<{ _id: string; email: string; name?: string }>;
   addedBy?: mongoose.Types.ObjectId | null;
   isOriginal?: boolean;
 }
@@ -1207,6 +1184,19 @@ export const getEventForOwner = async (eventId: string, userId: string): Promise
             isOriginal: originalValues.includes(value)
           };
         });
+
+        originalValues.forEach(value => {
+  // Skip if already added
+  if (!options.some(opt => opt.optionName === value)) {
+    options.push({
+      optionName: value,
+      voteCount: 0,
+      voters: [],
+      voterDetails: [],
+      isOriginal: true
+    });
+  }
+});
         
         // Add to list fields data
         listFieldsData.push({
@@ -1408,6 +1398,14 @@ export const finalizeEvent = async (
   
   appAssert(userExists, NOT_FOUND, "User not found");
 
+    const validationResult = finalizeEventRequestSchema.safeParse(selections);
+  if (!validationResult.success) {
+    const firstError = validationResult.error.errors[0];
+    appAssert(false, BAD_REQUEST, `Invalid request: ${firstError.message} at ${firstError.path.join('.')}`);
+  }
+  
+  const { date, place, customFields } = validationResult.data;
+
   // Find the event and ensure this user is the owner
   const event = await EventModel.findById(eventId);
   appAssert(event, NOT_FOUND, "Event not found");
@@ -1526,11 +1524,459 @@ export const finalizeEvent = async (
   event.eventDate = selections.date ? new Date(selections.date) : null;
   event.place = selections.place;
   await event.save();
+
+
+  // Send email notifications to all participants
+  try {
+    // Get all users who have responded to this event
+    const participants = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId)
+    }).distinct('userEmail');
+    
+    if (participants.length > 0) {
+      // Create the finalized event URL
+      const finalizedEventUrl = `${APP_ORIGIN}/event/finalized/${event.eventUUID}`;
+      
+      // Send notification emails in the background (don't wait)
+      Promise.all(participants.map(async (participantEmail) => {
+        try {
+          const { data, error } = await sendMail({
+            to: participantEmail,
+            ...getEventFinalizedTemplate(
+              event.name,
+              selections.date,
+              selections.place,
+              customFieldSelections,
+              finalizedEventUrl
+            )
+          });
+          
+          if (error) {
+            console.error(`Error sending finalization notification to ${participantEmail}:`, error);
+          } else {
+            console.log(`Finalization notification sent successfully to ${participantEmail}`);
+          }
+        } catch (emailError) {
+          console.error(`Failed to send finalization email to ${participantEmail}:`, emailError);
+        }
+      }))
+      .then(() => {
+        console.log(`Sent finalization notifications to ${participants.length} participants`);
+      })
+      .catch((error) => {
+        console.error('Error sending finalization notification emails:', error);
+      });
+    }
+  } catch (error) {
+    // Log the error but don't fail the finalization process
+    console.error('Error while sending finalization emails:', error);
+  }
   
   // Send notifications to participants (implement later)
   
   return {
     event,
     finalizedEvent
+  };
+};
+
+export const getFinalizedEventData = async (eventUUID: string) => {
+  // Fetch the event by UUID
+  const event = await EventModel.findOne({ eventUUID });
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Check if this event is finalized
+  appAssert(event.status === 'finalized', BAD_REQUEST, "This event hasn't been finalized yet");
+  
+  // Get the finalized event details
+  const finalizedEvent = await FinalizedEventModel.findOne({ eventId: event._id });
+  appAssert(finalizedEvent, NOT_FOUND, "Finalized event data not found");
+  
+  // Get organizer info
+  const organizer = await UserModel.findById(event.createdBy);
+  appAssert(organizer, NOT_FOUND, "Event organizer not found");
+  
+  return {
+    event: {
+      _id: event._id,
+      name: event.name,
+      description: event.description,
+      eventUUID: event.eventUUID,
+      status: event.status,
+      createdBy: event.createdBy,
+      createdAt: event.createdAt
+    },
+    finalizedEvent: {
+      finalizedDate: finalizedEvent.finalizedDate,
+      finalizedPlace: finalizedEvent.finalizedPlace,
+      customFieldSelections: finalizedEvent.customFieldSelections,
+      finalizedAt: finalizedEvent.finalizedAt,
+      finalizedBy: finalizedEvent.finalizedBy
+    },
+    organizer: {
+      email: organizer.email,
+    }
+  };
+};
+
+export const removeEventOption = async (
+  eventId: string,
+  userId: string,
+  categoryName: string,
+  optionName: string,
+  fieldId?: string
+): Promise<any> => {
+  console.log(`Removing option "${optionName}" from category "${categoryName}" with fieldId "${fieldId}"`);
+  
+  // Verify user exists
+  const userExists = await UserModel.exists({
+    _id: new mongoose.Types.ObjectId(userId)
+  });
+  
+  appAssert(userExists, NOT_FOUND, "User not found");
+
+  // Find the event and ensure this user is the owner
+  const event = await EventModel.findById(eventId);
+  appAssert(event, NOT_FOUND, "Event not found");
+  
+  // Verify this user is the event creator
+  appAssert(
+    event.createdBy.equals(new mongoose.Types.ObjectId(userId)),
+    FORBIDDEN,
+    "Only the event creator can modify this event"
+  );
+  
+  // Verify event is not finalized
+  appAssert(
+    event.status !== 'finalized',
+    BAD_REQUEST,
+    "Event is already finalized and cannot be modified"
+  );
+  
+  // Find the fieldId if not provided (by matching category name with customFields titles)
+  let effectiveFieldId = fieldId;
+  if (!effectiveFieldId && event.customFields) {
+    // Look through all customFields to find a matching title
+    for (const [key, field] of event.customFields.entries()) {
+      if (field.title === categoryName) {
+        effectiveFieldId = key;
+        console.log(`Found matching fieldId ${effectiveFieldId} for category ${categoryName}`);
+        break;
+      }
+    }
+  }
+  
+  // Track affected users from voting categories
+  let affectedUserIds: string[] = [];
+  
+  // 1. Handle custom fields (radio, checkbox, list)
+  if (effectiveFieldId && event.customFields && event.customFields.has(effectiveFieldId)) {
+    const customField = event.customFields.get(effectiveFieldId);
+    console.log(`Processing custom field: ${effectiveFieldId}, type: ${customField?.type}`);
+     if (customField && customField.type === 'text') {
+      console.log(`Validating text field deletion for field: ${effectiveFieldId}`);
+    // Count total text responses for this field BEFORE making any changes
+    const textResponses = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      "fieldResponses": { 
+        $elemMatch: { 
+          fieldId: effectiveFieldId, 
+          type: 'text',
+          response: { $ne: "" }
+        } 
+      }
+    });
+
+     console.log(`Found ${textResponses.length} text responses for field ${effectiveFieldId}`);
+    
+    appAssert(
+      textResponses.length > 1,
+      BAD_REQUEST,
+      `Cannot remove the only response in required text field '${categoryName}'. At least one response must remain for event finalization.`
+    );
+  }
+    
+    // Check if this is a field with options (radio, checkbox)
+    if (customField && customField.options && Array.isArray(customField.options)) {
+      // Find the option in the field options using case-insensitive comparison
+      const fieldOptionIndex = customField.options.findIndex(
+        (opt: { label?: string; id?: number }) => opt.label && opt.label.toLowerCase() === optionName.toLowerCase()
+      );
+      
+      // If found, remove it
+      if (fieldOptionIndex !== -1) {
+        console.log(`Removing option "${optionName}" from customFields[${effectiveFieldId}].options`);
+        // Make sure there's more than one option for radio/checkbox fields
+        // appAssert(
+        //   customField.options.length > 1,
+        //   BAD_REQUEST,
+        //   `Cannot remove the only option in field '${categoryName}'`
+        // );
+        
+        customField.options.splice(fieldOptionIndex, 1);
+        
+        // Update the field in the Map
+        event.customFields.set(effectiveFieldId, customField);
+        
+        // Explicitly mark the customFields as modified
+        event.markModified(`customFields`);
+      } else {
+        console.log(`Option "${optionName}" not found in customFields[${effectiveFieldId}].options`);
+      }
+    } else if (customField && customField.type === 'list' && customField.values && Array.isArray(customField.values)) {
+      console.log(`Processing list field: ${effectiveFieldId}`);
+      const originalValuesCount = customField.values.length;
+      const originalValues = customField.values;
+      console.log(`Original values count: ${originalValuesCount}`);
+  console.log(`Original values:`, customField.values);
+    // Get all user-added values for this list field from responses
+    const responses = await EventResponseModel.find({
+      eventId: new mongoose.Types.ObjectId(eventId),
+      "fieldResponses.fieldId": effectiveFieldId,
+      "fieldResponses.type": "list"
+    });
+    
+  const userAddedValues = new Set();
+  responses.forEach(response => {
+    const fieldResponse = response.fieldResponses.find(
+      fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
+    );
+    if (fieldResponse && Array.isArray(fieldResponse.response)) {
+      // Find values that are NOT in the original values array
+      fieldResponse.response.forEach(value => {
+        if (!originalValues.includes(value)) {
+          userAddedValues.add(value);
+        }
+      });
+      console.log(`User ${response.userId} response:`, fieldResponse.response);
+    }
+  });
+    
+    const totalOptionsCount = originalValuesCount + userAddedValues.size;
+      console.log(`User added values (unique):`, Array.from(userAddedValues));
+  console.log(`Total options count: ${totalOptionsCount} (${originalValuesCount} original + ${userAddedValues.size} user-added)`);
+  console.log(`Trying to delete: "${optionName}"`)
+        
+        // Make sure there's more than one value for list fields
+        appAssert(
+          totalOptionsCount > 1,
+          BAD_REQUEST,
+          `Cannot remove the only value in list field '${categoryName}'`
+        );
+      // For list fields, remove from values array
+      const valueIndex = customField.values.findIndex(
+        (value: string) => value.toLowerCase() === optionName.toLowerCase()
+      );
+      
+      if (valueIndex !== -1) {
+        console.log(`Removing value "${optionName}" from customFields[${effectiveFieldId}].values`);
+
+         
+        
+        customField.values.splice(valueIndex, 1);
+        
+        // Update the field in the Map
+        event.customFields.set(effectiveFieldId, customField);
+        
+        // Explicitly mark the customFields as modified
+        event.markModified(`customFields`);
+      }
+    }
+  }
+  
+  // 2. Handle built-in date/place categories
+  if (categoryName.toLowerCase() === 'date' && event.eventDates && event.eventDates.dates) {
+    // Remove from the dates array if it exists there
+    const dateIndex = event.eventDates.dates.findIndex(
+      (date) => date.toLowerCase() === optionName.toLowerCase()
+    );
+    
+    if (dateIndex !== -1) {
+      console.log(`Removing date "${optionName}" from eventDates.dates`);
+      
+      // Make sure there's more than one date
+      // appAssert(
+      //   event.eventDates.dates.length > 1,
+      //   BAD_REQUEST,
+      //   `Cannot remove the only date in event date options`
+      // );
+      
+      event.eventDates.dates.splice(dateIndex, 1);
+      
+      // Explicitly mark the eventDates as modified
+      event.markModified('eventDates');
+    }
+  } else if (categoryName.toLowerCase() === 'place' && event.eventPlaces && event.eventPlaces.places) {
+    // Remove from the places array if it exists there
+    const placeIndex = event.eventPlaces.places.findIndex(
+      (place) => place.toLowerCase() === optionName.toLowerCase()
+    );
+    
+    if (placeIndex !== -1) {
+      console.log(`Removing place "${optionName}" from eventPlaces.places`);
+      
+      // Make sure there's more than one place
+      // appAssert(
+      //   event.eventPlaces.places.length > 1,
+      //   BAD_REQUEST,
+      //   `Cannot remove the only place in event place options`
+      // );
+      
+      event.eventPlaces.places.splice(placeIndex, 1);
+      
+      // Explicitly mark the eventPlaces as modified
+      event.markModified('eventPlaces');
+    }
+  }
+  
+  // 3. ALWAYS handle voting categories (for ALL field types including custom radio/checkbox)
+  // Find the voting category
+  const categoryIndex = event.votingCategories.findIndex(
+    cat => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+  );
+  
+  if (categoryIndex !== -1) {
+    const category = event.votingCategories[categoryIndex];
+    
+    // Find the option
+    const optionIndex = category.options.findIndex(
+      opt => opt.optionName.toLowerCase() === optionName.toLowerCase()
+    );
+    
+    if (optionIndex !== -1) {
+      console.log(`Removing option "${optionName}" from voting category "${categoryName}"`);
+      
+      // Ensure there will be at least one option left
+      appAssert(
+        category.options.length > 1,
+        BAD_REQUEST,
+        `Cannot remove the only option in category '${categoryName}'`
+      );
+      
+      // Get the option to be removed (for tracking affected users)
+      const removedOption = category.options[optionIndex];
+      affectedUserIds = removedOption.votes.map(userId => userId.toString());
+      
+      // Remove the option from the category
+      category.options.splice(optionIndex, 1);
+      
+      // Explicitly mark the votingCategories as modified
+      event.markModified('votingCategories');
+    }
+  }
+  
+  // Save the updated event
+  await event.save();
+  
+  // Update user responses in bulk using MongoDB update operators
+  try {
+    // For date category
+    if (categoryName.toLowerCase() === 'date') {
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { suggestedDates: optionName } }
+      );
+    }
+    // For place category
+    else if (categoryName.toLowerCase() === 'place') {
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { suggestedPlaces: optionName } }
+      );
+    }
+    
+    // For custom fields with a provided fieldId
+    if (effectiveFieldId) {
+      // Create a properly typed update query for suggestedOptions
+      const suggestedOptionsPath = `suggestedOptions.${effectiveFieldId}`;
+      
+      // Use MongoDB's updateMany with a properly structured update for suggestedOptions
+      await EventResponseModel.updateMany(
+        { eventId: new mongoose.Types.ObjectId(eventId) },
+        { $pull: { [suggestedOptionsPath]: optionName } }
+      );
+      
+      console.log(`Updated suggestedOptions using path: ${suggestedOptionsPath}`);
+      
+      // Get the customField to determine its type
+      const customField = event.customFields?.get(effectiveFieldId);
+      
+      if (customField) {
+        // For text fields - remove matching responses
+        if (customField.type === 'text') {
+          await EventResponseModel.updateMany(
+            { 
+              eventId: new mongoose.Types.ObjectId(eventId),
+              "fieldResponses": { 
+                $elemMatch: { 
+                  fieldId: effectiveFieldId, 
+                  type: 'text', 
+                  response: optionName 
+                } 
+              }
+            },
+            { 
+              $pull: { 
+                "fieldResponses": { 
+                  fieldId: effectiveFieldId, 
+                  type: 'text', 
+                  response: optionName 
+                } 
+              } 
+            }
+          );
+          
+          console.log(`Removed text responses matching "${optionName}" for field "${effectiveFieldId}"`);
+        }
+        // For list fields - remove the item from array responses
+        else if (customField.type === 'list') {
+          // First approach: Find all responses with this field
+          const responses = await EventResponseModel.find({
+            eventId: new mongoose.Types.ObjectId(eventId),
+            "fieldResponses.fieldId": effectiveFieldId,
+            "fieldResponses.type": "list"
+          });
+          
+          // Update each response individually to properly handle the array
+          for (const response of responses) {
+            // Find the specific fieldResponse
+            const fieldResponseIndex = response.fieldResponses.findIndex(
+              fr => fr.fieldId === effectiveFieldId && fr.type === 'list'
+            );
+            
+            if (fieldResponseIndex !== -1) {
+              const fieldResponse = response.fieldResponses[fieldResponseIndex];
+              
+              // Remove the option from the array if it exists
+              if (Array.isArray(fieldResponse.response)) {
+                const responseArray = fieldResponse.response;
+                const newResponseArray = responseArray.filter(
+                  (item) => item !== optionName
+                );
+                
+                // Only update if something changed
+                if (newResponseArray.length !== responseArray.length) {
+                  response.fieldResponses[fieldResponseIndex].response = newResponseArray;
+                  await response.save();
+                  console.log(`Removed "${optionName}" from list response for user ${response.userId}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error updating user responses:', error);
+    // Continue execution - don't throw an error here
+  }
+  
+  return {
+    event: {
+      _id: event._id,
+      name: event.name,
+      status: event.status
+    },
+    affectedUsers: affectedUserIds.length
   };
 };

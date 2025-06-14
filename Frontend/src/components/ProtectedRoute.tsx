@@ -3,9 +3,11 @@ import { Navigate, useLocation } from 'react-router-dom';
 import useAuth from '@/hooks/useAuth';
 import { Loader2, XCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import Navbar from '@/components/Navbar';
+import Navbar from './NavBar';
+import { ApiError } from '@/types';
 
-export const ProtectedRoute = ({ children }) => {
+
+export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading, isError, error } = useAuth();
   const location = useLocation();
 
@@ -32,7 +34,7 @@ export const ProtectedRoute = ({ children }) => {
   }
 
   if (isError || !user) {
-    if (error?.status === 401) {
+     if ((error as ApiError)?.status === 401) {
       return <Navigate to="/login" state={{ from: location }} replace />;
     }
     return (

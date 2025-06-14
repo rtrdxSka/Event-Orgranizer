@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { closeEvent, reopenEvent, finalizeEvent } from '@/lib/api';
-import { AlertCircle, X, Calendar, MapPin, Check, CheckCircle, Lock, Unlock, AlertTriangle  } from 'lucide-react';
+import { AlertCircle, X, Calendar, MapPin, CheckCircle, Lock, Unlock, AlertTriangle  } from 'lucide-react';
 import { 
   Dialog, 
   DialogContent, 
@@ -13,8 +13,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FieldType } from '@/types';
+
+type BackendCustomField = {
+  type: FieldType;
+  title: string;
+  placeholder: string;
+  value: string;
+  required: boolean;
+  readonly: boolean;
+  maxVotes?: number;
+  options?: { id: number; label: string; checked?: boolean }[];
+  values?: string[];
+  maxEntries?: number;
+  allowUserAdd?: boolean;
+  maxOptions?: number;
+  allowUserAddOptions?: boolean;
+  selectedOption?: number | null;
+};
 
 // Define Props
 interface EventStatusManagementProps {
@@ -24,6 +41,7 @@ interface EventStatusManagementProps {
     status: 'open' | 'closed' | 'finalized';
     eventDate?: string | null;
     place?: string | null;
+    customFields?: Record<string, BackendCustomField>;
   };
   // For final date selection, the event's voting categories
   dateOptions?: { optionName: string, voteCount: number }[] | null;
@@ -32,7 +50,7 @@ interface EventStatusManagementProps {
   finalizeData?: {
     date: string | null;
     place: string | null;
-    customFields: Record<string, any>;
+    customFields: Record<string, string | string[] | number | boolean>;
   } | null;
   // Validation function from parent
   validateSelections?: () => boolean;
@@ -40,8 +58,6 @@ interface EventStatusManagementProps {
 
 const EventStatusManagement: React.FC<EventStatusManagementProps> = ({ 
   event,
-  dateOptions,
-  placeOptions,
   finalizeData,
   validateSelections
 }) => {
@@ -56,7 +72,7 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   
   // Update selected date and place when finalizeData changes
-  useEffect(() => {
+  React.useEffect(() => {
     if (finalizeData) {
       setSelectedDate(finalizeData.date);
       setSelectedPlace(finalizeData.place);
@@ -71,7 +87,7 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
       toast.success('Event closed successfully');
       setIsCloseDialogOpen(false);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to close event');
     }
   });
@@ -84,7 +100,7 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
       toast.success('Event reopened successfully');
       setIsReopenDialogOpen(false);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to reopen event');
     }
   });
@@ -94,14 +110,14 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
     mutationFn: () => finalizeEvent(event._id, finalizeData || {
       date: selectedDate,
       place: selectedPlace,
-      customFields: {}
+      customFields: {} as Record<string, string | string[] | number | boolean>
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventEdit', event._id] });
       toast.success('Event finalized successfully');
       setIsFinalizeDialogOpen(false);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to finalize event');
     }
   });
@@ -118,19 +134,12 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
         hour: '2-digit',
         minute: '2-digit'
       });
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };
   
-  // For date/place selection in finalize dialog
-  const sortedDateOptions = dateOptions ? 
-    [...dateOptions].sort((a, b) => b.voteCount - a.voteCount) : 
-    [];
-    
-  const sortedPlaceOptions = placeOptions ? 
-    [...placeOptions].sort((a, b) => b.voteCount - a.voteCount) : 
-    [];
+
 
   // Get appropriate status badge
   const getStatusBadge = () => {
@@ -157,18 +166,6 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
       if (!isValid) {
         return; // Don't open dialog if validation fails
       }
-    }
-    
-    // If we have no date selection and no options or date is required
-    if (!finalizeData?.date && (!sortedDateOptions.length || sortedDateOptions.length > 0)) {
-      setValidationMessage("Please select a date for the event");
-      return;
-    }
-    
-    // If we have no place selection and place is required
-    if (!finalizeData?.place && (!sortedPlaceOptions.length || sortedPlaceOptions.length > 0)) {
-      setValidationMessage("Please select a location for the event");
-      return;
     }
     
     // Open the finalize dialog
@@ -227,12 +224,14 @@ const EventStatusManagement: React.FC<EventStatusManagementProps> = ({
         }
         
         // Format the value based on type
-        let displayValue;
-        if (Array.isArray(value)) {
-          displayValue = value.join(', ');
-        } else {
-          displayValue = value.toString();
-        }
+        let displayValue: string;
+       if (Array.isArray(value)) {
+  displayValue = value.join(', ');
+} else if (value !== null && value !== undefined) {
+  displayValue = String(value);
+} else {
+  displayValue = '';
+}
         
         // Add to details
         details.push({

@@ -120,14 +120,38 @@ export const initialFormData: EventFormData = {
     allowUserAdd: true,
     maxVotes: 1
   },
-   closesBy: ""
+    closesBy: (() => {
+    // Set default to 7 days from now
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    defaultDate.setHours(23, 59, 0, 0); // Set to end of day
+    return defaultDate.toISOString().slice(0, 16); // Format for datetime-local input
+  })()
 };
 
 // Define a type for the event creation payload
 export type CreateEventPayload = {
   name: string;
   description: string;
-  customFields: Record<string, any>;
+  customFields: Record<string, {
+    type: FieldType;
+    title: string;
+    placeholder: string;
+    value: string;
+    required: boolean;
+    readonly: boolean;
+    options?: Array<{
+      id: number;
+      label: string;
+      checked?: boolean;
+    }>;
+    selectedOption?: number | null;
+    maxOptions?: number;
+    allowUserAddOptions?: boolean;
+    values?: string[];
+    maxEntries?: number;
+    allowUserAdd?: boolean;
+  }>;
   eventDates: {
     dates: string[];
     maxDates: number;
@@ -142,7 +166,7 @@ export type CreateEventPayload = {
     categoryName: string;
     options: Array<{
       optionName: string;
-      votes: any[];
+      votes: string[];
     }>;
   }>;
 };
@@ -155,7 +179,25 @@ export type EventResponse = {
       _id: string;
       name: string;
       description: string;
-      customFields: Record<string, any>;
+      customFields: Record<string, {
+        type: FieldType;
+        title: string;
+        placeholder: string;
+        value: string;
+        required: boolean;
+        readonly: boolean;
+        options?: Array<{
+          id: number;
+          label: string;
+          checked?: boolean;
+        }>;
+        selectedOption?: number | null;
+        maxOptions?: number;
+        allowUserAddOptions?: boolean;
+        values?: string[];
+        maxEntries?: number;
+        allowUserAdd?: boolean;
+      }>;
       eventDates: {
         dates: string[];
         maxDates: number;
@@ -181,6 +223,8 @@ export type EventResponse = {
 };
 
 export interface EventGet {
+  status: 'open' | 'closed' | 'finalized';
+  otherResponsesCount: number;
   _id: string;
   name: string;
   description: string;
@@ -189,19 +233,39 @@ export interface EventGet {
   createdAt: string;
   eventDate: string | null;
   place: string | null;
-  eventDates?: {
+  eventDates: {
     dates: string[];
     maxDates: number;
     allowUserAdd: boolean;
     maxVotes: number;
   };
-  eventPlaces?: {
+  eventPlaces: {
     places: string[];
     maxPlaces: number;
     allowUserAdd: boolean;
     maxVotes: number;
   };
-  customFields?: Record<string, any>;
+  customFields?: Record<string, {
+    id: unknown;
+    maxVotes: number | undefined;
+    type: FieldType;
+    title: string;
+    placeholder: string;
+    value: string;
+    required: boolean;
+    readonly: boolean;
+    options?: Array<{
+      id: number;
+      label: string;
+      checked?: boolean;
+    }>;
+    selectedOption?: number | null;
+    maxOptions?: number;
+    allowUserAddOptions?: boolean;
+    values?: string[];
+    maxEntries?: number;
+    allowUserAdd?: boolean;
+  }>;
   votingCategories?: Array<{
     categoryName: string;
     options: Array<{
@@ -215,6 +279,20 @@ export interface EventGet {
   __v: number;
 }
 
+type CustomFieldValue =
+  | string // for text fields
+  | string[] // for list fields
+  | {
+      // for radio fields
+      value: string;
+      userAddedOptions: string[];
+    }
+  | {
+      // for checkbox fields
+      userAddedOptions: string[];
+      [optionId: string]: boolean | string[]; // option IDs as keys with boolean values, plus userAddedOptions
+    };
+
 //eventResponse types
 export interface EventResponsePayload {
   eventId: string;
@@ -222,7 +300,7 @@ export interface EventResponsePayload {
   selectedPlaces: string[];
   suggestedDates: string[];
   suggestedPlaces: string[];
-  customFields: Record<string, any>;
+  customFields: Record<string, CustomFieldValue>;
   votingCategories: VotingCategory[];
 }
 
@@ -272,7 +350,7 @@ export interface EventResponseData {
 export interface FieldResponse {
   fieldId: string;
   type: string;
-  response: any;
+  response: string | string[];
 }
 
 export interface UserEventResponse {
@@ -316,7 +394,7 @@ export interface TextFieldResponseData {
 
 export interface EventOwnerResponse {
   event: EventGet;
-  responses: any[];
+  responses: EventResponseData[];
   chartsData: Array<{
     categoryName: string;
     options: Array<{
@@ -328,7 +406,11 @@ export interface EventOwnerResponse {
         email: string;
         name?: string;
       }>;
-      addedBy?: any;
+      addedBy?: {
+        _id: string;
+        email: string;
+        name?: string;
+      } | null;
     }>;
   }>;
   listFieldsData: Array<{
@@ -355,10 +437,109 @@ export interface FinalizeSelections {
   categorySelections: Record<string, string>;
   listSelections: Record<string, string[]>;
   textSelections: Record<string, string>;
+  checkboxSelections?: Record<string, string[]>;
 }
 
 export interface FinalizeData {
   date: string | null;
   place: string | null;
-  customFields: Record<string, any>;
+  customFields: Record<string, string | string[]>;
 }
+
+export interface FinalizeEventResponse {
+  status: string;
+  message?: string;
+  data?: {
+    eventId: string;
+    finalizedAt: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface FinalizedEvent {
+  _id: string;
+  name: string;
+  description: string;
+  eventUUID: string;
+  status: 'finalized';
+  eventDate: string | null;
+  place: string | null;
+  customFields?: Record<string, unknown>;
+  finalizedAt: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventStatusResponse {
+  status: string;
+  message?: string;
+  data?: {
+    eventId: string;
+    status: string;
+    updatedAt: string;
+  };
+}
+
+export interface RemoveOptionResponse {
+  status: string;
+  message?: string;
+  data?: {
+    eventId: string;
+    removedOption: string;
+    categoryName: string;
+  };
+}
+
+export interface GoogleCalendarEventResponse {
+  event: {
+    htmlLink: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface CustomFieldData {
+  id: number;
+  type: FieldType;
+  title: string;
+  placeholder: string;
+  required: boolean;
+  optional?: boolean;
+  // Text field specific
+  value?: string;
+  readonly?: boolean;
+  // List field specific
+  values?: string[];
+  maxEntries?: number;
+  allowUserAdd?: boolean;
+  // Radio/Checkbox field specific
+  options?: Array<{ id: number; label: string }>;
+  maxOptions?: number;
+  allowUserAddOptions?: boolean;
+}
+
+export interface CustomFieldSelection {
+  fieldId: string;
+  fieldType: string; // 'text' | 'radio' | 'checkbox' | 'list'
+  fieldTitle: string;
+  selection: string | string[] | { [key: string]: boolean | string[] }; // Covers all field types
+  voterDetails?: Array<{ _id: string; email: string; name?: string }>;
+}
+
+export interface FinalizedEventData {
+  event: EventGet;
+  finalizedEvent: {
+    finalizedDate: string | null;
+    finalizedPlace: string | null;
+    customFieldSelections: Record<string, CustomFieldSelection>;
+    finalizedAt: string;
+    finalizedBy: string;
+  };
+  organizer: {
+    _id: string;
+    email: string;
+    name?: string;
+  };
+}
+

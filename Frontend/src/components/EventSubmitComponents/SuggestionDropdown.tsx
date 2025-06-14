@@ -19,7 +19,6 @@ interface SuggestionDropdownProps {
 }
 
 const SuggestionDropdown: React.FC<SuggestionDropdownProps> = ({
-  fieldId,
   fieldTitle,
   suggestions,
   onSelect,
@@ -51,7 +50,7 @@ const SuggestionDropdown: React.FC<SuggestionDropdownProps> = ({
       });
       
       return `${dateFormatted} at ${timeFormatted}`;
-    } catch (error) {
+    } catch {
       return dateStr; // Return original if parsing fails
     }
   };

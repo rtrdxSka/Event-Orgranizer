@@ -1,8 +1,9 @@
 // GuestRoute.jsx
 import { Navigate, useLocation } from 'react-router-dom';
+import { PropsWithChildren } from 'react';
 import useAuth from '@/hooks/useAuth';
 
-export const GuestRoute = ({ children }) => {
+export const GuestRoute = ({ children }: PropsWithChildren) => {
   // With enabled: false, the query won't run, so we don't need to handle loading state
   const { user } = useAuth({ enabled: false });
   const location = useLocation();

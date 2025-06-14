@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, EventResponseSuccess, UserEventResponse, OtherUserResponsesData, EventOwnerResponse } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, UserEventResponse, EventOwnerResponse, FinalizeEventResponse, FinalizedEventData, RemoveOptionResponse } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -67,30 +67,46 @@ export const getEvent = async (eventUUID: string): Promise<EventGet> => {
 
 
 // Submit event response
-export const submitEventResponse = async (responseData: EventResponsePayload): Promise<EventResponseSuccess> => {
+export const submitEventResponse = async (responseData: EventResponsePayload) => {
   const response = await API.post('/event/response', responseData);
   return response;
 };
 
-export const updateEventResponse = async (eventId: string, responseData: EventResponsePayload): Promise<EventResponseSuccess> => {
+export const updateEventResponse = async (eventId: string, responseData: EventResponsePayload) => {
   const response = await API.put(`/event/response/${eventId}`, responseData);
   return response;
 };
 
 
 export const getUserEventResponse = async (eventId: string): Promise<{
-  status: string;
   data: UserEventResponse;
 }> => {
   const response = await API.get(`/event/${eventId}/response`);
   return response;
 };
 
-export const getOtherUserSuggestions = async (eventId: string): Promise<{
-  status: string;
-  data: OtherUserResponsesData;
-}> => {
-  const response = await API.get(`/event/${eventId}/other-responses`);
+export const getOtherUserSuggestions = async (
+  eventId: string,
+  options?: {
+    page?: number;
+    limit?: number;
+    maxSuggestions?: number;
+  }
+) => {
+  const params = new URLSearchParams();
+  
+  if (options?.page !== undefined) {
+    params.append('page', options.page.toString());
+  }
+  if (options?.limit) {
+    params.append('limit', options.limit.toString());
+  }
+  if (options?.maxSuggestions) {
+    params.append('maxSuggestions', options.maxSuggestions.toString());
+  }
+  
+  const url = `/event/${eventId}/other-responses${params.toString() ? `?${params}` : ''}`;
+  const response = await API.get(url);
   return response;
 };
 
@@ -113,12 +129,12 @@ export const getEventForOwner = async (eventId: string): Promise<EventOwnerRespo
 };
 
 // Event status management functions
-export const closeEvent = async (eventId: string): Promise<any> => {
+export const closeEvent = async (eventId: string) => {
   const response = await API.patch(`/event/${eventId}/close`);
   return response;
 };
 
-export const reopenEvent = async (eventId: string): Promise<any> => {
+export const reopenEvent = async (eventId: string) => {
   const response = await API.patch(`/event/${eventId}/reopen`);
   return response;
 };
@@ -126,7 +142,27 @@ export const reopenEvent = async (eventId: string): Promise<any> => {
 export const finalizeEvent = async (eventId: string, selectionData: {
   date: string | null;
   place: string | null;
-  customFields: Record<string, any>;
-}): Promise<any> => {
+  customFields: Record<string, string | string[] | number | boolean>;
+}): Promise<FinalizeEventResponse> => {
   return API.post(`/event/${eventId}/finalize`, selectionData);
+};
+
+export const getFinalizedEvent = async (eventUUID: string): Promise<FinalizedEventData> => {
+  const response = await API.get(`/event/finalized/${eventUUID}`);
+  return response.data;
+};
+
+export const removeEventOption = async (
+  eventId: string, 
+  categoryName: string, 
+  optionName: string, 
+  fieldId?: string
+): Promise<RemoveOptionResponse> => {
+  return API.delete(`/event/${eventId}/option`, {
+    data: {
+      categoryName,
+      optionName,
+      fieldId
+    }
+  });
 };

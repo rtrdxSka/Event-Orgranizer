@@ -13,6 +13,7 @@ import userRoutes from "./routes/user.route";
 import sessionRoutes from "./routes/session.route";
 import eventRoutes from "./routes/event.route";
 import { initCronJobs } from "./config/cron";
+import googleAuthRoutes from "./routes/googleAuth.route";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(
   })
 )
 app.use(cookieParser());
+
 app.get("/", (req, res, next) => {
     res.status(OK).json({
       status:"healthy"
@@ -38,7 +40,7 @@ app.use("/auth", authRoutes);
 app.use('/user',authenticate,userRoutes)
 app.use('/sessions',authenticate,sessionRoutes)
 app.use("/event",authenticate,eventRoutes)
-
+app.use("/auth", googleAuthRoutes)
 app.use(errorHandler);
 
 app.listen(PORT, async () => {

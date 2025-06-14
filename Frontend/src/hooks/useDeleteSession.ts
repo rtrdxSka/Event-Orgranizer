@@ -1,6 +1,7 @@
 import { deleteSessions } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SESSIONS } from "./useSessions";
+import { Session } from "@/types";
 
 
 const useDeleteSession = (sessionId: string) => {
@@ -11,7 +12,7 @@ const useDeleteSession = (sessionId: string) => {
       // queryClient.invalidateQueries([SESSIONS])
       queryClient.setQueryData(
         [SESSIONS],
-        (cache) => cache.filter((session) => session._id !== sessionId)
+         (cache: Session[] | undefined) => cache?.filter((session) => session._id !== sessionId)
       )
     }
   })

@@ -65,6 +65,7 @@ const EventFormFields = ({
             onChange={handleInputChange}
             className="bg-purple-800/50 border-purple-600 text-purple-100"
             placeholder="Select closing date and time"
+            required
           />
           <p className="text-purple-400 text-sm mt-2">
             Set a date when voting for this event will close. If not set, the event will remain open indefinitely.

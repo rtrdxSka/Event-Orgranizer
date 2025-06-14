@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import catchErrors from "../utils/catchErrors";
-import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
+import { closeEvent, createEvent, createOrUpdateEventResponse, finalizeEvent, getEventByUUID, getEventForOwner, getEventResponses, getFinalizedEventData, getOtherUserResponses, getUserCreatedEvents, getUserEventResponse, getUserRespondedEvents, removeEventOption, reopenEvent, updateEventResponseWithNotifications, verifyEventAcceptsResponses } from "../services/event.service";
 import appAssert from "../utils/appAssert";
 import { BAD_REQUEST, CREATED, FORBIDDEN, OK } from "../constants/http";
-import { createEventResponseSchema } from "./eventResponse.schemas";
+import { createEventResponseSchema } from "../validations/eventResponse.schemas";
 import { Document } from "mongoose";
 import { EventDocument } from "../models/event.model";
 
@@ -113,7 +113,16 @@ export const getOtherUserResponsesHandler = catchErrors(async (req: Request, res
   const eventId = req.params.eventId;
   const userId = req.userId.toString();
   
-  const data = await getOtherUserResponses(eventId, userId);
+  // Add query parameters for pagination and limits
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100
+  const page = Math.max(parseInt(req.query.page as string) || 0, 0);
+  const maxSuggestionsPerField = Math.min(parseInt(req.query.maxSuggestions as string) || 50, 200);
+  
+  const data = await getOtherUserResponses(eventId, userId, {
+    limit,
+    page, 
+    maxSuggestionsPerField
+  });
 
   return res.status(OK).json({
     status: "success",
@@ -222,6 +231,41 @@ export const finalizeEventHandler = catchErrors(async (req: Request, res: Respon
     data: {
       event: result.event
     }
+  });
+});
+
+export const getFinalizedEventHandler = catchErrors(async (req: Request, res: Response) => {
+  const { eventUUID } = req.params;
+  
+  // Make sure UUID exists
+  appAssert(eventUUID, BAD_REQUEST, "Event UUID is required");
+  
+  // Get the finalized event data from the service
+  const data = await getFinalizedEventData(eventUUID);
+
+  return res.status(OK).json({
+    status: "success",
+    data
+  });
+})
+
+export const removeEventOptionHandler = catchErrors(async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  const userId = req.userId.toString();
+  const { categoryName, optionName, fieldId } = req.body;
+  
+  // Validate input
+  appAssert(categoryName, BAD_REQUEST, "Category name is required");
+  appAssert(optionName, BAD_REQUEST, "Option name is required");
+  // fieldId is optional since date/place categories don't have fieldIds
+  
+  // Call the service function
+  const result = await removeEventOption(eventId, userId, categoryName, optionName, fieldId);
+  
+  return res.status(OK).json({
+    status: "success",
+    message: "Option removed successfully",
+    data: result
   });
 });
 

@@ -3,12 +3,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Laptop, Trash2, Clock } from 'lucide-react';
 import useDeleteSession from "@/hooks/useDeleteSession";
+import { Session } from '@/types';
 
-const SessionCard = ({ session }) => {
+
+
+const SessionCard = ({ session }: { session: Session }) => {
   const { _id, createdAt, userAgent, isCurrent } = session;
   const { deleteSession, isPending } = useDeleteSession(_id);
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',

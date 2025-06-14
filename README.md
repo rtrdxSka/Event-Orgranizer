@@ -131,7 +131,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔮 Future Enhancements
 
-- Calendar integration with Google, Apple, and Outlook calendars
+- Calendar integration with Apple, and Outlook calendars
 - Email reminders for events
 - Advanced filters for event searching
 - Mobile application
