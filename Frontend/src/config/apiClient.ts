@@ -24,6 +24,12 @@ interface APIError {
 let isRefreshing = false;
 let refreshPromise: Promise<void> | null = null;
 
+const isPublicRoute = () => {
+  const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password'];
+  const currentPath = window.location.pathname;
+  return publicRoutes.includes(currentPath) || currentPath.startsWith('/reset-password');
+};
+
 API.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   async (error: APIError) => {
@@ -37,14 +43,16 @@ API.interceptors.response.use(
           await refreshPromise;
           // Retry the original request after refresh completes
           return API(config);
-        } catch {
-          // Refresh failed, redirect to login
+         } catch {
+          // Refresh failed, redirect to login only if not on public route
           queryClient.clear();
-          navigate("/login", {
-            state: {
-              redirectUrl: window.location.pathname
-            }
-          } as { state: { redirectUrl: string } });
+          if (!isPublicRoute()) {
+            navigate("/login", {
+              state: {
+                redirectUrl: window.location.pathname
+              }
+            } as { state: { redirectUrl: string } });
+          }
           return Promise.reject({ status, ...data });
         }
       }
@@ -58,15 +66,17 @@ API.interceptors.response.use(
           refreshPromise = null;
         })
         .catch((refreshError) => {
-          // Failed - reset flags and redirect
+          // Failed - reset flags and redirect only if not on public route
           isRefreshing = false;
           refreshPromise = null;
           queryClient.clear();
-          navigate("/login", {
-            state: {
-              redirectUrl: window.location.pathname
-            }
-          } as { state: { redirectUrl: string } });
+          if (!isPublicRoute()) {
+            navigate("/login", {
+              state: {
+                redirectUrl: window.location.pathname
+              }
+            } as { state: { redirectUrl: string } });
+          }
           throw refreshError;
         });
 

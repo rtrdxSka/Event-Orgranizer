@@ -5,19 +5,8 @@ import { Calendar, Users, MessageSquare, MapPin, Check, Clock, Bell } from 'luci
 import anime from 'animejs/lib/anime.es.js';
 import { Link, useNavigate  } from 'react-router-dom';
 
-interface VisibilityState {
-  features?: boolean;
-  howItWorks?: boolean;
-  cta?: boolean;
-  [key: string]: boolean | undefined; // This allows for dynamic keys
-}
-
 const Home = () => {
   const navigate = useNavigate();
-  const [currentWord, setCurrentWord] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false)
-  const alternateWords = ['Hangouts', 'Meetings', 'Reunions', 'Events', 'Meetups', 'Celebrations'];
-  const [isVisible, setIsVisible] = useState<VisibilityState>({});
   const [orbPositions] = useState(
     [...Array(8)].map(() => ({
       top: `${Math.random() * 100}%`,
@@ -35,28 +24,6 @@ const Home = () => {
   const wordRef = useRef<HTMLSpanElement>(null);
   const processLineRef = useRef<HTMLDivElement>(null);
 
-  // Intersection Observer for scroll animations
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible(prev => ({ ...prev, [entry.target.id]: true }));
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    [featuresRef, howItWorksRef, ctaRef].forEach(ref => {
-      if (ref.current) observer.observe(ref.current);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-
-    // Add new useEffect for process line animation
     useEffect(() => {
       const observer = new IntersectionObserver(
         (entries) => {
@@ -83,40 +50,40 @@ const Home = () => {
     }, []);
 
 
-  useEffect(() => {
-    const animate = () => {
-      setIsAnimating(true);
-      anime.timeline({
-        easing: 'easeInOutQuad',
-      })
-      .add({
-        targets: wordRef.current,
-        opacity: 0,
-        translateY: 20,
-        duration: 300,
-        complete: () => {
-          setCurrentWord((prev) => (prev + 1) % alternateWords.length);
+useEffect(() => {
+  const alternateWords = ['Hangouts', 'Meetings', 'Reunions', 'Events', 'Meetups', 'Celebrations'];
+  let currentIndex = 0;
+  
+  const animate = () => {
+    if (!wordRef.current) return;
+    
+    anime.timeline({
+      easing: 'easeInOutQuad',
+    })
+    .add({
+      targets: wordRef.current,
+      opacity: 0,
+      translateY: 20,
+      duration: 300,
+      complete: () => {
+        // Update text directly without state change
+        if (wordRef.current) {
+          currentIndex = (currentIndex + 1) % alternateWords.length;
+          wordRef.current.textContent = alternateWords[currentIndex];
         }
-      })
-      .add({
-        targets: wordRef.current,
-        opacity: 1,
-        translateY: 0,
-        duration: 300,
-        complete: () => {
-          setIsAnimating(false);
-        }
-      });
-    };
-
-    const interval = setInterval(() => {
-      if (!isAnimating) {
-        animate();
       }
-    }, 3000);
+    })
+    .add({
+      targets: wordRef.current,
+      opacity: 1,
+      translateY: 0,
+      duration: 300,
+    });
+  };
 
-    return () => clearInterval(interval);
-  }, [isAnimating]);
+  const interval = setInterval(animate, 3000);
+  return () => clearInterval(interval);
+}, []); // Empty dependency array - no re-renders!
 
   useEffect(() => {
     // Initial hero animations
@@ -222,12 +189,12 @@ const Home = () => {
           <div className="text-center">
            <h1 ref={titleRef} className="text-6xl md:text-8xl font-bold mb-8 text-white tracking-tight text-nowrap">
       Plan{' '}
-      <span 
-        ref={wordRef}
-        className="inline-block min-w-[300px] opacity-100"
-      >
-        {alternateWords[currentWord]}
-      </span>
+<span 
+  ref={wordRef}
+  className="inline-block min-w-[300px] opacity-100"
+>
+  Hangouts
+</span>
       {', '}
       <br className="md:hidden" />
       Effortlessly
@@ -258,7 +225,7 @@ const Home = () => {
 
 {/* Enhanced Features Section */}
 <div id="features" ref={featuresRef} className="max-w-7xl mx-auto px-4 py-32">
-        <div className={`transition-all duration-1000 transform ${isVisible.features ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+        <div className="transition-all duration-1000 transform translate-y-0 opacity-100">
           <h2 className="text-4xl md:text-5xl font-bold text-center mb-20 text-purple-100">
             Why Choose Our Platform?
           </h2>
@@ -319,7 +286,7 @@ const Home = () => {
 
     {/* Enhanced How It Works Section */}
     <div id="howItWorks" ref={howItWorksRef} className="bg-gradient-to-br from-purple-900 to-blue-900/80 py-32">
-        <div className={`max-w-7xl mx-auto px-4 transition-all duration-1000 transform ${isVisible.howItWorks ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+        <div className={`max-w-7xl mx-auto px-4 transition-all duration-1000 transform transition-all duration-1000 transform translate-y-0 opacity-100}`}>
           <h2 className="text-4xl md:text-5xl font-bold text-center mb-20 text-purple-100">
             Your Event Journey
           </h2>
@@ -409,7 +376,7 @@ const Home = () => {
       </div>
       {/* CTA Section - Updated button to use React Router */}
       <div id="cta" ref={ctaRef} className="bg-gradient-to-r from-purple-800 via-purple-700 to-blue-800 text-white text-center py-32">
-        <div className={`max-w-4xl mx-auto px-4 transition-all duration-1000 transform ${isVisible.cta ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+        <div className={`max-w-4xl mx-auto px-4 transition-all duration-1000 transform transition-all duration-1000 transform translate-y-0 opacity-100}`}>
           <h2 className="text-4xl md:text-5xl font-bold mb-8">
             Ready to Make Event Planning Easier?
           </h2>
@@ -420,7 +387,7 @@ const Home = () => {
             size="lg" 
             variant="secondary" 
             className="bg-purple-200 text-purple-950 hover:bg-purple-100 font-semibold px-12 py-8 text-xl rounded-2xl hover:scale-105 transition-transform duration-300"
-            onClick={() => navigate('/signup')}
+            onClick={() => navigate('/register')}
           >
             Get Started Free
           </Button>
