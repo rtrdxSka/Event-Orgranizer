@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, User, LogOut } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -11,6 +11,8 @@ const Navbar = () => {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  // const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+  // const { user } = useAuth({ enabled: !isAuthPage });
   const { user } = useAuth();
 
   const isActive = (path: string) => {
@@ -134,4 +136,6 @@ const Navbar = () => {
   );
 };
 
-export default Navbar;
+const MemoizedNavbar = memo(Navbar);
+MemoizedNavbar.displayName = 'Navbar';
+export default MemoizedNavbar;
