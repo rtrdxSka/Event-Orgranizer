@@ -5,6 +5,7 @@ import { AccessTokenPayload, verifyToken } from "../utils/jwt";
 import { UNAUTHORIZED } from "../constants/http";
 import mongoose from "mongoose";
 import UserModel from "../models/user.model";
+import SessionModel from "../models/session.model";
 
 const authenticate: RequestHandler = async (req, res, next) => {
   try {
@@ -13,6 +14,14 @@ const authenticate: RequestHandler = async (req, res, next) => {
 
     const { error, payload } = verifyToken<AccessTokenPayload>(accessToken);
     appAssert(payload, UNAUTHORIZED, error === "jwt expired" ? "Token expired" : "Invalid Token", AppErrorCode.InvalidAccessToken);
+
+    const session = await SessionModel.findById(payload.sessionId);
+    appAssert(
+      session && session.expiresAt.getTime() > Date.now(), 
+      UNAUTHORIZED, 
+      "Session expired or invalid", 
+      AppErrorCode.InvalidAccessToken
+    );
 
     req.userId = payload.userId as mongoose.Types.ObjectId;
     req.sessionId = payload.sessionId as mongoose.Types.ObjectId;
