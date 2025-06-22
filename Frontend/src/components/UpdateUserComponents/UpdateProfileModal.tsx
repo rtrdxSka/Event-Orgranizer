@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, AlertCircle, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, AlertCircle, CheckCircle, Lock, Eye, EyeOff, Info } from 'lucide-react';
 
 interface UpdateProfileModalProps {
   isOpen: boolean;
@@ -69,10 +69,17 @@ const UpdateProfileModal: React.FC<UpdateProfileModalProps> = ({
       queryClient.setQueryData(['user'], response.data.user);
       
       // Show success toast
-      toast.success('Profile Updated', {
-        description: response.message,
-        duration: 5000,
-      });
+toast.success(
+  <div className="flex flex-col gap-1">
+    <div className="font-semibold text-purple-100">Profile Updated</div>
+    <div className="text-sm text-purple-300">{response.message}</div>
+  </div>,
+  {
+    duration: 5000,
+    className: 'bg-purple-900 border border-purple-700 rounded-lg',
+    icon: <CheckCircle className="h-5 w-5 text-green-400" />
+  }
+);
       
       // Close modal and reset form
       onClose();
@@ -100,9 +107,18 @@ const UpdateProfileModal: React.FC<UpdateProfileModalProps> = ({
     const passwordProvided = data.currentPassword || data.newPassword || data.confirmPassword;
     
     if (!emailChanged && !passwordProvided) {
-      toast.info('No changes detected', {
-        description: 'Please make changes to your profile before submitting.',
-      });
+toast.info(
+  <div className="flex flex-col gap-1">
+    <div className="font-semibold text-purple-100">No changes detected</div>
+    <div className="text-sm text-purple-300">
+      Please make changes to your profile before submitting.
+    </div>
+  </div>,
+  {
+    className: 'bg-purple-900 border border-purple-700 rounded-lg',
+    icon: <Info className="h-5 w-5 text-blue-400" />
+  }
+);
       return;
     }
     
