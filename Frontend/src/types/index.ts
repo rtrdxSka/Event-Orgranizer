@@ -543,3 +543,19 @@ export interface FinalizedEventData {
   };
 }
 
+export type UpdateUserParams = {
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+}
+
+export type UpdateUserResponse = {
+  status: string;
+  message: string;
+  data: {
+    user: User;
+    eventResponsesUpdated?: number;
+  };
+}
+
