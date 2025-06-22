@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Session, User} from '@/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -8,9 +8,12 @@ import useAuth from '@/hooks/useAuth';
 import Navbar from '@/components/NavBar';
 import useSessions from '@/hooks/useSessions';
 import SessionCard from '@/components/SessionCard';
+import UpdateProfileModal from '@/components/UpdateUserComponents/UpdateProfileModal';
 
 const Profile = () => {
   const { user } = useAuth();
+
+    const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
  
   const { email, verified, createdAt } = user as User;
   const {sessions = [], isPending, isError} = useSessions();
@@ -93,6 +96,7 @@ const Profile = () => {
               <div className="bg-purple-900/40 rounded-xl p-6 border border-purple-700/50">
                 <h3 className="text-xl font-semibold text-purple-100 mb-4">Account Settings</h3>
                 <Button 
+                onClick={() => setIsUpdateModalOpen(true)}
                   variant="secondary" 
                   className="bg-purple-200 text-purple-950 hover:bg-purple-100"
                 >
@@ -118,6 +122,12 @@ const Profile = () => {
             </div>
           )}
         </div>
+
+        <UpdateProfileModal
+          isOpen={isUpdateModalOpen}
+          onClose={() => setIsUpdateModalOpen(false)}
+          user={user as User}
+        />
 
       </div>
     </div>

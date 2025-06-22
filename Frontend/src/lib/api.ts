@@ -1,5 +1,5 @@
 import API from "@/config/apiClient";
-import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, UserEventResponse, EventOwnerResponse, FinalizeEventResponse, FinalizedEventData, RemoveOptionResponse } from "@/types";
+import { CreateEventPayload, EventResponse, User, EventGet, EventResponsePayload, UserEventResponse, EventOwnerResponse, FinalizeEventResponse, FinalizedEventData, RemoveOptionResponse, UpdateUserParams, UpdateUserResponse } from "@/types";
 
 type LoginParams = {
   email: string;
@@ -23,6 +23,10 @@ export const login = async (data: LoginParams) => {
 
 export const register = async (data: RegisterParams) => {
   return API.post('/auth/register', data);
+}
+
+export const updateUser = async (data: UpdateUserParams): Promise<UpdateUserResponse> => {
+  return API.put('/user', data);
 }
 
 export const verifyEmail = async (verificationCode: string) => {
