@@ -666,20 +666,22 @@ const {
                   <p className="text-purple-200">{event.place}</p>
                 </div>
               )}
-              <Button
-                onClick={() => navigate("/events")}
-                className="mt-6 bg-purple-200 text-purple-950 hover:bg-purple-100 "
-              >
-                View My Events
-              </Button>
-              <Button
-                type="button"
-                onClick={() => navigate(`/event/finalized/${eventUUID}`)}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-medium shadow-lg transition-all duration-200 flex items-center gap-2 w-full max-w-xs"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View Finalized Details
-              </Button>
+<div className="mt-6 flex flex-col gap-3 w-full max-w-xs mx-auto">
+  <Button
+    onClick={() => navigate("/events")}
+    className="bg-purple-200 text-purple-950 hover:bg-purple-100"
+  >
+    View My Events
+  </Button>
+  <Button
+    type="button"
+    onClick={() => navigate(`/event/finalized/${eventUUID}`)}
+    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-medium shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+  >
+    <ExternalLink className="h-4 w-4" />
+    View Finalized Details
+  </Button>
+</div>
             </div>
           </div>
         </div>
