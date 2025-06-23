@@ -7,8 +7,6 @@
 
 EventPlanner is a full-stack web application designed to simplify the process of planning events and gatherings. It allows users to create events with customizable fields, collect responses from participants, visualize voting results, and finalize event details based on group preferences.
 
-![Event Planner Screenshot](https://via.placeholder.com/800x400)
-
 ## ✨ Features
 
 ### 📅 Event Creation
