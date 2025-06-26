@@ -610,6 +610,7 @@ export const getOtherUserResponses = async (
       if (response.fieldResponses) {
         for (const fieldResponse of response.fieldResponses) {
           const { fieldId, type, response: fieldValue } = fieldResponse;
+          const field = event.customFields?.get(fieldId);
           
           if (type === 'list' && Array.isArray(fieldValue)) {
             if (!allUniqueSuggestions.customFields[fieldId]) {
@@ -617,10 +618,15 @@ export const getOtherUserResponses = async (
             }
             
             const fieldSet = allUniqueSuggestions.customFields[fieldId];
+
+            const originalValues = field.values || [];
             
             for (const value of fieldValue) {
               if (typeof value === 'string' && value.trim() !== '') {
                 // Check uniqueness logic here
+                if (originalValues.includes(value)) {
+                  continue;
+                }
                 let isUnique = true;
                 if (currentUserResponse) {
                   const userFieldResponse = currentUserResponse.fieldResponses.find(fr => fr.fieldId === fieldId);
